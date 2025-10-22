@@ -37,6 +37,8 @@ Overall, this approach **simplifies dependency management**, reduces build times
 
 ## ⚙️ How it works
 
+0. You need to clone git library repositories to `libs/src`.
+
 1. Each dependency is registered during configuration using one of the helper functions: `deps_add_cmake_project()`, `deps_add_header_only()`, or `deps_add_manual_install()`. You can use the `DEPS_CMAKE_GLOBAL_ARGS` variable to set common cmake configuration arguments for all cmake libraries.
 
 2. Once all dependencies are declared, a single call to `deps_build_all()` triggers the build process. This command invokes the external **Python script**, which compiles and installs each dependency into the target directory defined by `${DEPS_INSTALL_DIR}`.
