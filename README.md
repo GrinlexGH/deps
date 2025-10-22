@@ -5,6 +5,8 @@
 
 This module provides an autonomous way to build and install external dependencies during CMake configuration. It allows a project to remain self-contained without requiring preinstalled SDKs or system-wide packages.
 
+###### Also provides some `FindXXX.cmake` modules.
+
 **Features:**
 - Builds external libraries (CMake-based) in **Release mode**
 - Caches each dependency by **Git commit hash** to avoid redundant rebuilds
