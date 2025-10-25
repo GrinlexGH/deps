@@ -5,7 +5,7 @@ This module provides an autonomous way to build and install external dependencie
 ###### Also provides some `FindXXX.cmake` modules.
 
 **Features:**
-- Builds external libraries (CMake-based) in **Release mode**
+- Builds external libraries _only_ in **Release mode** as a separate projects
 - Caches each dependency by **Git commit hash** to avoid redundant rebuilds
 - Supports **per-ABI or per-runtime variants** using `${DEPS_INSTALL_DIR}`
 - Integrates cleanly with VSCode's **CMake Tools kits**
