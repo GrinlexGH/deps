@@ -36,7 +36,7 @@ Overall, this approach **simplifies dependency management**, reduces build times
 
 ## How it works
 
-0. You need to clone git library repositories to `libs/src`.
+0. You need to clone git library repositories to `third_party/src`.
 
 1. Each dependency is registered during configuration using one of the helper functions: `deps_add_cmake_project()`, `deps_add_header_only()`, or `deps_add_manual_install()`. You can use the `DEPS_CMAKE_GLOBAL_ARGS` variable to set common cmake configuration arguments for all cmake libraries.
 
@@ -52,14 +52,14 @@ Overall, this approach **simplifies dependency management**, reduces build times
 ## Directory layout
 
 ```
-libs/
-  ├─ src/                     # Dependency source trees (must be git repositories)
-  ├─ bin/
-  │   ├─ Windows-x64/msvcrt/  # Example install location (MSVC runtime)
-  │   ├─ Windows-x64/libcxx/  # Example install location (Clang + libc++)
-  │   ├─ Linux-x64/           # Example install location (Linux)
-  │   └─ cache/               # Git-hash build cache
-  └─ install_dependencies.py  # Python helper script
+third_party/
+     ├─ src/                     # Dependency source trees (must be git repositories)
+     ├─ bin/
+     │   ├─ Windows-x64/msvcrt/  # Example install location (MSVC runtime)
+     │   ├─ Windows-x64/libcxx/  # Example install location (Clang + libc++)
+     │   ├─ Linux-x64/           # Example install location (Linux)
+     │   └─ cache/               # Git-hash build cache
+     └─ install_dependencies.py  # Python helper script
 ```
 
 ## Installation path scheme
@@ -69,8 +69,8 @@ libs/
 Example:
 
 ```
-libs/bin/Windows-x64/msvcrt/  # MSVC runtime
-libs/bin/Windows-x64/libcxx/  # Clang + libc++
+third_party/bin/Windows-x64/msvcrt/  # MSVC runtime
+third_party/bin/Windows-x64/libcxx/  # Clang + libc++
 ```
 
 This layout allows multiple binary variants to coexist:
@@ -112,19 +112,20 @@ For more info see comments in [Deps.cmake](../cmake/Modules/Deps.cmake).
 
 | Variable                          | Description |
 |-----------------------------------|---------------------------------------------------------------------|
-| DEPS_SOURCES_DIR (Env)            | Path containing dependency sources as git repositories (default: `${PROJECT_SOURCE_DIR}/libs/src`) |
+| DEPS_THIRD_PARTY_SUBDIR* (Env)    | Name of the directory with Python script and all third-party library files (default: `third_party`) |
+| DEPS_SOURCES_DIR (Env)            | Path containing dependency sources as git repositories (default: `${PROJECT_SOURCE_DIR}/${DEPS_THIRD_PARTY_SUBDIR}/src`) |
 | DEPS_TARGET_SYSTEM* (Env)         | Target OS name (e.g., "Windows", "Linux", "Darwin") (default: `${CMAKE_SYSTEM_NAME}`) |
 | DEPS_TARGET_ARCH* (Env)           | Target architecture (e.g., "x64", "arm64") (default: `${CMAKE_SYSTEM_PROCESSOR}`) |
 | DEPS_SUBDIR* (Env)                | Runtime variant identifier (e.g., "msvcrt", "libcxx", "mingw") |
-| DEPS_INSTALL_DIR (Env)            | Installation directory (default: `${PROJECT_SOURCE_DIR}/libs/bin/${DEPS_TARGET_SYSTEM}-${DEPS_TARGET_ARCH}/${DEPS_SUBDIR}`) |
+| DEPS_INSTALL_DIR (Env)            | Installation directory (default: `${PROJECT_SOURCE_DIR}/${DEPS_THIRD_PARTY_SUBDIR}/bin/${DEPS_TARGET_SYSTEM}-${DEPS_TARGET_ARCH}/${DEPS_SUBDIR}`) |
 | DEPS_CACHE_DIR (Env)              | Path to git-hash build cache (default: `${DEPS_INSTALL_DIR}/cache`) |
 | DEPS_PYTHON (Env)                 | Path to Python interpreter (optional override) |
-| DEPS_PYTHON (Env)                 | Path to the Python script (default: `${PROJECT_SOURCE_DIR}/libs/install_dependencies.py`) |
+| DEPS_PYTHON (Env)                 | Path to the Python script (default: `${PROJECT_SOURCE_DIR}/${DEPS_THIRD_PARTY_SUBDIR}/install_dependencies.py`) |
 | DEPS_CMAKE_GLOBAL_ARGS (Env)      | Additional global arguments passed to dependency CMake builds |
 | DEPS_HEADER_SUBDIR (Env)          | Subdirectory name for header-only libraries (default: `header-only`) |
 | DEPS_HEADER_ONLY_INCLUDE_DIR      | Read-only variable. Directory with headers of header-only libraries |
 
-\* must be set before `DEPS_INSTALL_DIR` is defined  
+\* must be set before setting all cache variables  
 (Env) means that this variable **can** use the value of an environment variable with the same name if this variable is not set.
 
 ## When to use add_subdirectory() or system wide packages instead
@@ -178,7 +179,7 @@ include_directories(SYSTEM "${DEPS_HEADER_ONLY_INCLUDE_DIR}")
 find_package(SDL3 REQUIRED)
 find_package(SteamworksSDK REQUIRED)
 
-add_subdirectory(libs/src/glm EXCLUDE_FROM_ALL SYSTEM)
+add_subdirectory(third_party/src/glm EXCLUDE_FROM_ALL SYSTEM)
 
 add_executable(skylabs src/main.cpp)
 deps_target_link_and_copy_runtime(skylabs PRIVATE
