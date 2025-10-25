@@ -62,7 +62,7 @@ libs/
   └─ install_dependencies.py  # Python helper script
 ```
 
-## 🛠 Installation path scheme
+## Installation path scheme
 
 `${DEPS_INSTALL_DIR}/${DEPS_TARGET_SYSTEM}-${DEPS_TARGET_ARCH}/${DEPS_SUBFOLDER}`
 
