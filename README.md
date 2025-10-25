@@ -26,7 +26,7 @@ This script solves these problems by:
 - **Caching builds** using Git commit hashes, so libraries are rebuilt only when sources change
 - Installing libraries into a **structured, reproducible layout**:
 
-  `${DEPS_INSTALL_DIR}/${DEPS_TARGET_SYSTEM}-${DEPS_TARGET_ARCH}/${DEPS_SUBFOLDER}`
+  `${DEPS_INSTALL_DIR}/${DEPS_TARGET_SYSTEM}-${DEPS_TARGET_ARCH}/${DEPS_SUBDIR}`
 
   allowing multiple ABI/runtime variants side by side (e.g., MSVC vs Clang/libc++).
 - Providing a consistent and automatic CMake environment, including `CMAKE_PREFIX_PATH`
@@ -64,7 +64,7 @@ libs/
 
 ## Installation path scheme
 
-`${DEPS_INSTALL_DIR}/${DEPS_TARGET_SYSTEM}-${DEPS_TARGET_ARCH}/${DEPS_SUBFOLDER}`
+`${DEPS_INSTALL_DIR}/${DEPS_TARGET_SYSTEM}-${DEPS_TARGET_ARCH}/${DEPS_SUBDIR}`
 
 Example:
 
@@ -77,7 +77,7 @@ This layout allows multiple binary variants to coexist:
 
 - `${DEPS_TARGET_SYSTEM}` - target operating system ("Windows", "Linux", "Darwin")
 - `${DEPS_TARGET_ARCH}` - target CPU architecture ("x64", "arm64", ...)
-- `${DEPS_SUBFOLDER}` - optional runtime identifier ("msvcrt", "libcxx", "mingw", ...)
+- `${DEPS_SUBDIR}` - optional runtime identifier ("msvcrt", "libcxx", "mingw", ...)
                            or any label to distinguish different library versions for the same system
 
 This is particularly useful when switching between **CMake toolchains** or [**VS Code kits**](https://gist.github.com/GrinlexGH/cffbe9727b7183d7044e2c4af378ffd2).
@@ -113,10 +113,10 @@ For more info see comments in [Deps.cmake](../cmake/Modules/Deps.cmake).
 | Variable                          | Description |
 |-----------------------------------|---------------------------------------------------------------------|
 | DEPS_SOURCES_DIR (Env)            | Path containing dependency sources as git repositories (default: `${PROJECT_SOURCE_DIR}/libs/src`) |
-| DEPS_INSTALL_DIR (Env)            | Installation directory (default: `${PROJECT_SOURCE_DIR}/libs/bin/${DEPS_TARGET_SYSTEM}-${DEPS_TARGET_ARCH}/${DEPS_SUBFOLDER}`) |
 | DEPS_TARGET_SYSTEM* (Env)         | Target OS name (e.g., "Windows", "Linux", "Darwin") (default: `${CMAKE_SYSTEM_NAME}`) |
 | DEPS_TARGET_ARCH* (Env)           | Target architecture (e.g., "x64", "arm64") (default: `${CMAKE_SYSTEM_PROCESSOR}`) |
-| DEPS_SUBFOLDER* (Env)             | Runtime variant identifier (e.g., "msvcrt", "libcxx", "mingw") |
+| DEPS_SUBDIR* (Env)                | Runtime variant identifier (e.g., "msvcrt", "libcxx", "mingw") |
+| DEPS_INSTALL_DIR (Env)            | Installation directory (default: `${PROJECT_SOURCE_DIR}/libs/bin/${DEPS_TARGET_SYSTEM}-${DEPS_TARGET_ARCH}/${DEPS_SUBDIR}`) |
 | DEPS_CACHE_DIR (Env)              | Path to git-hash build cache (default: `${DEPS_INSTALL_DIR}/cache`) |
 | DEPS_PYTHON (Env)                 | Path to Python interpreter (optional override) |
 | DEPS_PYTHON (Env)                 | Path to the Python script (default: `${PROJECT_SOURCE_DIR}/libs/install_dependencies.py`) |
