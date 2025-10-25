@@ -168,10 +168,16 @@ deps_add_cmake_project("SDL" INSTALL_SUBDIR "SDL3" CMAKE_ARGS -DSDL_TEST_LIBRARY
 deps_add_header_only("tinyobjloader" HEADERS "tiny_obj_loader.h")
 deps_add_manual_install(
   "SteamworksSDK"
-  INSTALL_SUBDIR "SteamworksSDK"
   RULES
-    "public/steam/*.h"              "include/steam"
-    "redistributable_bin/**/*.dll"  "bin"
+    "redistributable_bin/**/*.dll"      "bin"
+    "public/steam/lib/**/*.dll"         "bin"
+    "public/steam/*.h"                  "include/steam"
+    "redistributable_bin/**/*.lib"      "lib"
+    "redistributable_bin/**/*.so"       "lib"
+    "redistributable_bin/**/*.dylib"    "lib"
+    "public/steam/lib/**/*.lib"         "lib"
+    "public/steam/lib/**/*.so"          "lib"
+    "public/steam/lib/**/*.dylib"       "lib"
 )
 deps_build_all()
 
