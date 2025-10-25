@@ -1,5 +1,5 @@
-# 🚀 Dependency Installer for CMake Projects
-## 📖 Overview
+# Dependency Installer for CMake Projects
+## Overview
 
 This module provides an autonomous way to build and install external dependencies during CMake configuration. It allows a project to remain self-contained without requiring preinstalled SDKs or system-wide packages.
 
@@ -11,7 +11,7 @@ This module provides an autonomous way to build and install external dependencie
 - Supports **per-ABI or per-runtime variants** using `${DEPS_INSTALL_DIR}`
 - Integrates cleanly with VSCode's **CMake Tools kits**
 
-## ❓ Why?
+## Why?
 
 Managing external dependencies in CMake projects is often **error-prone** and inefficient:
 
@@ -35,7 +35,7 @@ This script solves these problems by:
 
 Overall, this approach **simplifies dependency management**, reduces build times, ensures reproducibility, and keeps repositories self-contained.
 
-## ⚙️ How it works
+## How it works
 
 0. You need to clone git library repositories to `libs/src`.
 
@@ -50,7 +50,7 @@ Overall, this approach **simplifies dependency management**, reduces build times
 
    For manually installed or non-CMake libraries, you may need to provide your own `Find<Package>.cmake` module to expose imported targets and include/link settings.
 
-## 📁 Directory layout
+## Directory layout
 
 ```
 libs/
@@ -84,7 +84,7 @@ This layout allows multiple binary variants to coexist:
 This is particularly useful when switching between **CMake toolchains** or [**VS Code kits**](https://gist.github.com/GrinlexGH/cffbe9727b7183d7044e2c4af378ffd2).
 Each compiler/runtime combination can store its own binary set independently.
 
-## 🧩 Provided CMake functions
+## Provided CMake functions
 
 - `deps_append_cmake_define(VAR_NAME [VALUE])`  
   Adds define (-DVAR_NAME=VALUE) to the `DEPS_CMAKE_GLOBAL_ARGS`
@@ -109,7 +109,7 @@ Each compiler/runtime combination can store its own binary set independently.
 
 For more info see comments in [Deps.cmake](../cmake/Modules/Deps.cmake).
 
-## 🔧 CMake & environment variables
+## CMake & environment variables
 
 | Variable                          | Description |
 |-----------------------------------|---------------------------------------------------------------------|
@@ -128,17 +128,17 @@ For more info see comments in [Deps.cmake](../cmake/Modules/Deps.cmake).
 \* must be set before `DEPS_INSTALL_DIR` is defined  
 (Env) means that this variable **can** use the value of an environment variable with the same name if this variable is not set.
 
-## ⚠️ When to use add_subdirectory() instead
+## When to use add_subdirectory() instead
 
 Use `add_subdirectory()` only for static libraries that must match your project's compiler flags
 and runtime options.
 
 For all other external dependencies, prefer this system to reduce build complexity.  
-Of course large libraries like Qt are better handled via system packages and `find_package(EXACT)` 🔍.
+Of course large libraries like Qt are better handled via system packages and `find_package(EXACT)`.
 
-## 💡 Usage example
+## Usage example
 
-**Toolchain file (linux-arm.cmake) 🐧:**
+**Toolchain file (linux-arm.cmake):**
 
 ```cmake
 set(CMAKE_SYSTEM_NAME Linux)    # DEPS_TARGET_SYSTEM will equal CMAKE_SYSTEM_NAME
@@ -149,7 +149,7 @@ set(CMAKE_C_COMPILER ${tools}/bin/arm-linux-gnueabihf-gcc)
 set(CMAKE_CXX_COMPILER ${tools}/bin/arm-linux-gnueabihf-g++)
 ```
 
-**CMakeLists.txt 📄:**
+**CMakeLists.txt:**
 
 ```cmake
 cmake_minimum_required(VERSION 3.26)
