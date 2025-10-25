@@ -1,6 +1,6 @@
 # Dependency Installer for CMake Projects
 
-This module provides an autonomous way to build and install external dependencies during CMake configuration. It allows a project to remain self-contained without requiring preinstalled SDKs or system-wide packages.
+This module provides an autonomous way to build and install external dependencies during CMake configuration. It allows a project to remain self-contained without requiring preinstalled SDKs, system-wide packages, rebuilding libraries from source many times and cluttering your IDE solution with sources, that you will never change.
 
 ###### Also provides some `FindXXX.cmake` modules.
 
@@ -127,13 +127,13 @@ For more info see comments in [Deps.cmake](../cmake/Modules/Deps.cmake).
 \* must be set before `DEPS_INSTALL_DIR` is defined  
 (Env) means that this variable **can** use the value of an environment variable with the same name if this variable is not set.
 
-## When to use add_subdirectory() instead
+## When to use add_subdirectory() or system wide packages instead
 
 Use `add_subdirectory()` only for static libraries that must match your project's compiler flags
 and runtime options.
 
 For all other external dependencies, prefer this system to reduce build complexity.  
-Of course large libraries like Qt are better handled via system packages and `find_package(EXACT)`.
+Of course large libraries like Qt, that you will never want to build from source, are better handled via system packages and `find_package(EXACT)`.
 
 ## Usage example
 
