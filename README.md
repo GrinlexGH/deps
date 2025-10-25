@@ -1,5 +1,4 @@
 # Dependency Installer for CMake Projects
-## Overview
 
 This module provides an autonomous way to build and install external dependencies during CMake configuration. It allows a project to remain self-contained without requiring preinstalled SDKs or system-wide packages.
 
