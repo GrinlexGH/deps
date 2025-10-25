@@ -137,7 +137,7 @@ Of course large libraries like Qt, that you will never want to build from source
 
 ## Usage example
 
-**Toolchain file (linux-arm.cmake):**
+**Toolchain file:**
 
 ```cmake
 set(CMAKE_SYSTEM_NAME Linux)    # DEPS_TARGET_SYSTEM will equal CMAKE_SYSTEM_NAME
