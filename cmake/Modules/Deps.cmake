@@ -176,7 +176,7 @@ function(deps_add_cmake_project SOURCE_SUBDIR)
     if(ARG_CMAKE_ARGS)
         list(JOIN ARG_CMAKE_ARGS " " _cmake_args)
     else()
-        set(_cmake_args "")
+        set(_cmake_args " ")
     endif()
 
     set(_deps_cmd_args "${_deps_internal_cmd_args}")
