@@ -1,7 +1,7 @@
 # Author: Grinlex
 
 # Example of usage:
-# python install_dependencies.py \
+# python deps.py \
 #   --cache-dir caches \
 #   --cmake-lib VulkanMemoryAllocator-Hpp/Vulkan-Headers VulkanHeaders build "-DVULKAN_HEADERS_ENABLE_TESTS=OFF -DVULKAN-HEADERS_ENABLE_MODULE=ON" \
 #   --cmake-lib VulkanMemoryAllocator-Hpp/VulkanMemoryAllocator VulkanMemoryAllocator build "-DVMA_BUILD_DOCUMENTATION=OFF -DVMA_BUILD_SAMPLES=OFF -DVMA_ENABLE_INSTALL=ON" \
