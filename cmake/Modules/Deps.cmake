@@ -270,9 +270,12 @@ function(deps_add_manual_install SOURCE_SUBDIR)
     set(_deps_internal_cmd_args "${_deps_cmd_args}" PARENT_SCOPE)
 endfunction()
 
-# deps_build_all()
+# deps_build_all([VERBOSE])
 #
 # Builds and installs all registered dependencies using the Python helper script.
+#
+# Arguments:
+#   VERBOSE - Show running command line
 #
 # Behavior:
 #   - Invokes Python helper script with collected dependency definitions.
@@ -284,6 +287,8 @@ endfunction()
 #
 # Runs dependency installation for all libraries added via deps_add_* functions.
 function(deps_build_all)
+    cmake_parse_arguments(ARG "" "VERBOSE" "" ${ARGN})
+
     set(DEPS_INSTALL_CMD
         "${DEPS_PYTHON}"
         "${DEPS_SCRIPT_PATH}"
@@ -305,6 +310,10 @@ function(deps_build_all)
     endif()
 
     cmake_path(GET DEPS_SCRIPT_PATH PARENT_PATH _script_dir)
+
+    if(VERBOSE)
+        message(STATUS "Running command: ${DEPS_INSTALL_CMD}")
+    endif()
 
     execute_process(
         COMMAND ${DEPS_INSTALL_CMD}
