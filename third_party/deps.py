@@ -32,7 +32,7 @@ import sys
 from enum import IntEnum
 from glob import glob
 from pathlib import Path
-from typing import TypeVar
+from typing import TypeVar, Optional
 
 SOURCES_ROOT: Path
 INSTALL_ROOT: Path
@@ -47,12 +47,14 @@ class LogLevel(IntEnum):
     Warning = 2
     Error = 3
 
+
 class TerminalColors:
     OKBLUE = '\033[94m'
     OKGREEN = '\033[92m'
     WARNING = '\033[93m'
     FAIL = '\033[91m'
     ENDC = '\033[0m'
+
 
 def log(message, log_level:LogLevel=LogLevel.Info):
     if log_level == LogLevel.Error:
@@ -65,24 +67,33 @@ def log(message, log_level:LogLevel=LogLevel.Info):
         print(f"{TerminalColors.OKBLUE}{message}{TerminalColors.ENDC}", flush=True)
 
 
-# ? maybe I should add compilation argument hash or file hash?
-def get_git_hash(source_dir: Path) -> str:
-    result = subprocess.run(
-        ["git", "-C", str(source_dir), "rev-parse", "HEAD"],
-        capture_output=True, text=True, check=True
-    )
-    return result.stdout.strip()
+def write_line_at(path: Path, n: int, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
 
-def check_git_hash_match(source_dir: Path, hash_file: Path) -> bool:
-    try:
-        current_hash: str = get_git_hash(source_dir)
-        if hash_file.exists():
-            with open(hash_file, "r", encoding="utf-8") as f:
-                existing_hash: str = f.read().strip()
-            return current_hash == existing_hash
-    except subprocess.CalledProcessError as e:
-        log(f"Failed to get git hash for {source_dir}: {e}", LogLevel.Error)
-    return False
+    if path.exists():
+        with path.open("r", encoding="utf-8") as f:
+            lines = f.readlines()
+    else:
+        lines = []
+
+    while len(lines) < n:
+        lines.append("\n")
+
+    lines[n - 1] = text.rstrip("\n") + "\n"
+    with path.open("w", encoding="utf-8") as f:
+        f.writelines(lines)
+
+
+def read_line_at(path: Path, n: int) -> Optional[str]:
+    if not path.exists():
+        return None
+
+    with path.open("r", encoding="utf-8") as f:
+        for i, line in enumerate(f, start=1):
+            if i == n:
+                return line.rstrip("\n")
+
+    return None
 
 
 class InstallingLibrary(object):
@@ -91,6 +102,7 @@ class InstallingLibrary(object):
     install_dir: Path
     source_dir_base: Path
     install_dir_base: Path
+    git_hash: Optional[str]
 
     def __init__(self, source_dir_base: Path, install_dir_base: Path) -> None:
         self.lib_name = source_dir_base.name
@@ -98,16 +110,46 @@ class InstallingLibrary(object):
         self.install_dir = INSTALL_ROOT / install_dir_base
         self.source_dir_base = source_dir_base
         self.install_dir_base = install_dir_base
+        self.git_hash = None
+
 
     def BuildAndInstall(self) -> None:
         raise NotImplementedError
 
+
+    def GetGitHash(self) -> str:
+        if self.git_hash == None:
+            self.git_hash = subprocess.run(
+                ["git", "-C", str(self.source_dir), "rev-parse", "HEAD"],
+                capture_output=True, text=True, check=True
+            ).stdout.strip()
+        return self.git_hash
+
+
+    def CheckGitHash(self, hash_file: Path) -> bool:
+        try:
+            return self.GetGitHash() == read_line_at(hash_file, 1)
+        except subprocess.CalledProcessError as e:
+            log(f"Failed to get git hash for {self.source_dir}: {e}", LogLevel.Error)
+        return False
+
+
+    def IsHashRelevant(self, hash_file: Path) -> bool:
+        if hash_file.exists() and self.CheckGitHash(hash_file):
+            return True
+        return False
+
+
+    def WriteHash(self, hash_file) -> None:
+        write_line_at(hash_file, 1, self.GetGitHash())
+
+
     def InstallLibrary(self) -> None:
         global SOURCES_ROOT, INSTALL_ROOT, CACHE_ROOT
 
-        hash_file: Path = (CACHE_ROOT / self.install_dir_base if CACHE_ROOT else self.install_dir) / f"git_hash_{self.lib_name}.txt"
+        hash_file: Path = (CACHE_ROOT / self.install_dir_base if CACHE_ROOT else self.install_dir) / f"hash_{self.lib_name}.txt"
 
-        if hash_file.exists() and check_git_hash_match(self.source_dir, hash_file):
+        if self.IsHashRelevant(hash_file):
             log(f"[{self.lib_name}] is up to date.")
             return
 
@@ -116,12 +158,9 @@ class InstallingLibrary(object):
 
         log(f"Installing [{self.lib_name}]...")
 
-        self.BuildAndInstall()
+        # self.BuildAndInstall()
 
-        current_hash: str = get_git_hash(self.source_dir)
-        hash_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(hash_file, "w", encoding="utf-8") as f:
-            f.write(current_hash)
+        self.WriteHash(hash_file)
 
         log(f"[{self.lib_name}] installed.", LogLevel.Success)
 
@@ -143,14 +182,44 @@ def acquire_lock(lock_file: Path):
         f.close()
         return None
 
+
 class CMakeLibrary(InstallingLibrary):
     build_folder: Path
     extra_cmake_flags: list[str]
+    build_hash: Optional[str]
 
     def __init__(self, source_dir_base: Path, install_dir_base: Path, build_folder: Path | None = None, extra_cmake_flags: list[str] | None = None) -> None:
         super().__init__(source_dir_base, install_dir_base)
         self.extra_cmake_flags = extra_cmake_flags or []
         self.build_folder = build_folder or Path("build")
+        self.build_hash = None
+
+
+    def GetBuildHash(self):
+        if self.build_hash == None:
+            import hashlib
+            global CMAKE_GLOBAL_ARGS
+            data_str = '|'.join(self.extra_cmake_flags + CMAKE_GLOBAL_ARGS)
+            self.build_hash = hashlib.md5(data_str.encode()).hexdigest()
+        return self.build_hash
+
+
+    def CheckBuildHash(self, hash_file: Path):
+        try:
+            return self.GetBuildHash() == read_line_at(hash_file, 2)
+        except subprocess.CalledProcessError as e:
+            log(f"Failed to get git hash for {self.source_dir}: {e}", LogLevel.Error)
+        return False
+
+
+    def IsHashRelevant(self, hash_file) -> bool:
+        return super().IsHashRelevant(hash_file) and self.CheckBuildHash(hash_file)
+
+
+    def WriteHash(self, hash_file) -> None:
+        super().WriteHash(hash_file)
+        write_line_at(hash_file, 2, self.GetBuildHash())
+
 
     def BuildAndInstall(self) -> None:
         log(f"Compiling [{self.lib_name}]...")
@@ -160,38 +229,43 @@ class CMakeLibrary(InstallingLibrary):
         n = 0
         lock = None
 
-        while True:
-            lock_file = build_dir / ".lock"
-            lock = acquire_lock(lock_file)
+        try:
+            # Lock directory
+            while True:
+                lock_file = build_dir / ".lock"
+                lock = acquire_lock(lock_file)
+                if lock is not None:
+                    # Delete all files and folders except .lock file
+                    for item in build_dir.iterdir():
+                        if item.name == lock_file.name:
+                            continue
+                        if item.is_dir():
+                            shutil.rmtree(item)
+                        else:
+                            item.unlink()
+                    break
+                else:
+                    # Use build-{n} folder instead
+                    n += 1
+                    build_dir = self.source_dir / f"{self.build_folder}-{n}"
+
+            # Configure
+            cmake_cmd = [
+                CMAKE,
+                "-DCMAKE_BUILD_TYPE=Release", # ? what if user uses multi-config generator?
+                f"-DCMAKE_INSTALL_PREFIX={self.install_dir}",
+                f"-DCMAKE_PREFIX_PATH={INSTALL_ROOT}",
+                ".."
+            ] + self.extra_cmake_flags + CMAKE_GLOBAL_ARGS
+
+            subprocess.run(cmake_cmd, cwd=build_dir, check=True)
+
+            # Build
+            build_cmd = [CMAKE, "--build", ".", "--config", "Release", "--parallel"] # todo: job count argument
+            subprocess.run(build_cmd, cwd=build_dir, check=True)
+        finally:
             if lock is not None:
-                # Delete all files and folders except .lock file
-                for item in build_dir.iterdir():
-                    if item.name == lock_file.name:
-                        continue
-                    if item.is_dir():
-                        shutil.rmtree(item)
-                    else:
-                        item.unlink()
-                break
-            else:
-                # Use build-{n} folder instead
-                n += 1
-                build_dir = self.source_dir / f"{self.build_folder}-{n}"
-
-        cmake_cmd = [
-            CMAKE,
-            "-DCMAKE_BUILD_TYPE=Release", # ? what if user uses multi-config generator?
-            f"-DCMAKE_INSTALL_PREFIX={self.install_dir}",
-            f"-DCMAKE_PREFIX_PATH={INSTALL_ROOT}",
-            ".."
-        ] + self.extra_cmake_flags + CMAKE_GLOBAL_ARGS
-
-        subprocess.run(cmake_cmd, cwd=build_dir, check=True)
-
-        build_cmd = [CMAKE, "--build", ".", "--config", "Release", "--parallel"] # todo: job count argument
-        subprocess.run(build_cmd, cwd=build_dir, check=True)
-
-        lock.close() # Unlock the build folder
+                lock.close() # Unlock the build folder
 
         log(f"[{self.lib_name}] successfully built.", LogLevel.Success)
 
@@ -199,6 +273,7 @@ class CMakeLibrary(InstallingLibrary):
             shutil.rmtree(self.install_dir)
         self.install_dir.mkdir(parents=True)
 
+        # Install
         install_cmd = [CMAKE, "--install", ".", "--config", "Release"]
         subprocess.run(install_cmd, cwd=build_dir, check=True)
 
@@ -223,6 +298,7 @@ def split_pattern(pattern: str) -> tuple[Path, str]:
             sub = "/".join(parts[i:])
             return fixed, sub
     return Path(*parts), ""
+
 
 class ManualLibrary(InstallingLibrary):
     rules: list[tuple[str, str]]
@@ -283,6 +359,7 @@ def skip_if_missing(lib_folder: Path) -> bool:
         return True
     return False
 
+
 T = TypeVar("T", bound=InstallingLibrary)
 def install_libraries(libraries: list[T]) -> None:
     for library in libraries:
@@ -317,6 +394,7 @@ def parse_cmake_libs(args_list: list[list[str]]) -> list[CMakeLibrary]:
 
     return libs
 
+
 def parse_header_libs(args_list: list[list[str]]) -> list[HeaderLibrary]:
     libs = []
 
@@ -332,6 +410,7 @@ def parse_header_libs(args_list: list[list[str]]) -> list[HeaderLibrary]:
         libs.append(HeaderLibrary(Path(source_subdir), Path(install_subdir), paths))
 
     return libs
+
 
 def parse_manual_install_libs(args_list: list[list[str]]) -> list[ManualLibrary]:
     libs = []
