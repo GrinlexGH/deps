@@ -66,7 +66,7 @@ Optionally set `DEPS_OUT_SUBDIR` to keep builds for different compiler/runtime c
   deps_add_manual_install(<source_subdir> [INSTALL_SUBDIR <name>] [RULES <pattern> <dst> ...])
 
 # Triggers the installation process for all previously registered dependencies
-  deps_build_all()
+  deps_build_all([VERBOSE])
 
 # Copies runtime binaries of TARGETS next to the TARGET after build
   deps_copy_runtime_binaries(<TARGET> [TARGETS <lib>...])
