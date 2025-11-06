@@ -41,11 +41,18 @@ HEADER_SUBDIR: Path
 CMAKE: str
 CMAKE_GLOBAL_ARGS: list[str]
 
-class LogLevel(IntEnum):
+class LogType(IntEnum):
     Info = 0
     Success = 1
     Warning = 2
     Error = 3
+
+
+class LogLevel(IntEnum):
+    Normal = 0
+    V1 = 1
+    V2 = 2
+    V3 = 3
 
 
 class TerminalColors:
@@ -56,12 +63,18 @@ class TerminalColors:
     ENDC = '\033[0m'
 
 
-def log(message, log_level:LogLevel=LogLevel.Info):
-    if log_level == LogLevel.Error:
+CURRENT_LOG_LEVEL: LogLevel = LogLevel.Normal
+
+
+def log(message, log_type:LogType=LogType.Info, log_level:LogLevel=LogLevel.Normal):
+    if log_level > CURRENT_LOG_LEVEL:
+        return
+
+    if log_type == LogType.Error:
         print(f"{TerminalColors.FAIL}{message}{TerminalColors.ENDC}", flush=True)
-    elif log_level == LogLevel.Warning:
+    elif log_type == LogType.Warning:
         print(f"{TerminalColors.WARNING}{message}{TerminalColors.ENDC}", flush=True)
-    elif log_level == LogLevel.Success:
+    elif log_type == LogType.Success:
         print(f"{TerminalColors.OKGREEN}{message}{TerminalColors.ENDC}", flush=True)
     else:
         print(f"{TerminalColors.OKBLUE}{message}{TerminalColors.ENDC}", flush=True)
@@ -130,7 +143,7 @@ class InstallingLibrary(object):
         try:
             return self.GetGitHash() == read_line_at(hash_file, 1)
         except subprocess.CalledProcessError as e:
-            log(f"Failed to get git hash for {self.source_dir}: {e}", LogLevel.Error)
+            log(f"Failed to get git hash for {self.source_dir}: {e}", LogType.Error)
         return False
 
 
@@ -162,7 +175,7 @@ class InstallingLibrary(object):
 
         self.WriteHash(hash_file)
 
-        log(f"[{self.lib_name}] installed.", LogLevel.Success)
+        log(f"[{self.lib_name}] installed.", LogType.Success)
 
 
 # For parallel work of this script we need to lock the build dir
@@ -208,7 +221,7 @@ class CMakeLibrary(InstallingLibrary):
         try:
             return self.GetBuildHash() == read_line_at(hash_file, 2)
         except subprocess.CalledProcessError as e:
-            log(f"Failed to get git hash for {self.source_dir}: {e}", LogLevel.Error)
+            log(f"Failed to get git hash for {self.source_dir}: {e}", LogType.Error)
         return False
 
 
@@ -267,7 +280,7 @@ class CMakeLibrary(InstallingLibrary):
             if lock is not None:
                 lock.close() # Unlock the build folder
 
-        log(f"[{self.lib_name}] successfully built.", LogLevel.Success)
+        log(f"[{self.lib_name}] successfully built.", LogType.Success)
 
         if self.install_dir.exists():
             shutil.rmtree(self.install_dir)
@@ -313,7 +326,7 @@ class ManualLibrary(InstallingLibrary):
             glob_root = self.source_dir / fixed_prefix
 
             if not glob_root.exists():
-                log(f"Pattern base path not found: {glob_root}", LogLevel.Warning)
+                log(f"Pattern base path not found: {glob_root}", LogType.Warning)
                 continue
 
             if glob_root.is_file():
@@ -331,7 +344,7 @@ class ManualLibrary(InstallingLibrary):
                 try:
                     rel_path = full_path.relative_to(glob_root)
                 except ValueError:
-                    log(f"Failed to compute relative path for {full_path}", LogLevel.Warning)
+                    log(f"Failed to compute relative path for {full_path}", LogType.Warning)
                     continue
 
                 target = self.install_dir / dst_subdir / rel_path
@@ -355,7 +368,7 @@ class HeaderLibrary(ManualLibrary):
 
 def skip_if_missing(lib_folder: Path) -> bool:
     if not lib_folder.exists():
-        log(f"Source folder not found: {lib_folder}", LogLevel.Warning)
+        log(f"Source folder not found: {lib_folder}", LogType.Warning)
         return True
     return False
 
@@ -369,7 +382,7 @@ def install_libraries(libraries: list[T]) -> None:
         try:
             library.InstallLibrary()
         except subprocess.CalledProcessError:
-            log(f"Failed to build or install {library.lib_name}", LogLevel.Error)
+            log(f"Failed to build or install {library.lib_name}", LogType.Error)
             sys.exit(1)
 
 
@@ -378,7 +391,7 @@ def parse_cmake_libs(args_list: list[list[str]]) -> list[CMakeLibrary]:
 
     for group in args_list:
         if len(group) != 4:
-            log(f"Invalid --cmake-lib syntax: {group}", LogLevel.Error)
+            log(f"Invalid --cmake-lib syntax: {group}", LogType.Error)
             sys.exit(1)
 
         source_dir_base = group[0]
@@ -387,7 +400,7 @@ def parse_cmake_libs(args_list: list[list[str]]) -> list[CMakeLibrary]:
         try:
             extra_cmake_args = shlex.split(group[3])
         except ValueError as e:
-            log(f"Failed to parse cmake args for {source_dir_base}: {e}", LogLevel.Error)
+            log(f"Failed to parse cmake args for {source_dir_base}: {e}", LogType.Error)
             sys.exit(1)
 
         libs.append(CMakeLibrary(Path(source_dir_base), Path(install_dir_base), Path(build_dir), extra_cmake_args))
@@ -400,7 +413,7 @@ def parse_header_libs(args_list: list[list[str]]) -> list[HeaderLibrary]:
 
     for group in args_list:
         if len(group) < 3:
-            log(f"Invalid --header-lib syntax: {group}", LogLevel.Error)
+            log(f"Invalid --header-lib syntax: {group}", LogType.Error)
             sys.exit(1)
 
         source_subdir = group[0]
@@ -417,7 +430,7 @@ def parse_manual_install_libs(args_list: list[list[str]]) -> list[ManualLibrary]
 
     for group in args_list:
         if len(group) < 4 or len(group[2:]) % 2 != 0:
-            log(f"Invalid --manual-lib syntax: {group}", LogLevel.Error)
+            log(f"Invalid --manual-lib syntax: {group}", LogType.Error)
             sys.exit(1)
 
         source_subdir = group[0]
@@ -528,7 +541,7 @@ def main():
     if not(cmake_libraries) and not(header_libraries) and not(manual_install_libraries):
         log("Nothing to do.")
     else:
-        log("All libraries installed successfully", LogLevel.Success)
+        log("All libraries installed successfully", LogType.Success)
 
 if __name__ == "__main__":
     main()
