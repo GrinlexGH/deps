@@ -311,12 +311,7 @@ def split_pattern(pattern: str) -> tuple[Path, str]:
 class ManualLibrary(InstallingLibrary):
     rules: list[tuple[str, str]]
 
-    def __init__(
-        self,
-        source_dir_base: Path,
-        install_dir_base: Path,
-        rules: list[tuple[str, str]] | None = None,
-    ) -> None:
+    def __init__(self, source_dir_base: Path, install_dir_base: Path, rules: list[tuple[str, str]] | None = None) -> None:
         super().__init__(source_dir_base, install_dir_base)
         self.rules = rules or []
 
