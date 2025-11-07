@@ -41,6 +41,7 @@ HEADER_SUBDIR: Path
 CMAKE: str
 CMAKE_GLOBAL_ARGS: list[str]
 
+
 class LogType(IntEnum):
     Info = 0
     Success = 1
@@ -56,17 +57,17 @@ class LogLevel(IntEnum):
 
 
 class TerminalColors:
-    OKBLUE = '\033[94m'
-    OKGREEN = '\033[92m'
-    WARNING = '\033[93m'
-    FAIL = '\033[91m'
-    ENDC = '\033[0m'
+    OKBLUE = "\033[94m"
+    OKGREEN = "\033[92m"
+    WARNING = "\033[93m"
+    FAIL = "\033[91m"
+    ENDC = "\033[0m"
 
 
 CURRENT_LOG_LEVEL: LogLevel = LogLevel.Normal
 
 
-def log(message, log_type:LogType=LogType.Info, log_level:LogLevel=LogLevel.Normal):
+def log(message, log_type: LogType = LogType.Info, log_level: LogLevel = LogLevel.Normal):
     if log_level > CURRENT_LOG_LEVEL:
         return
 
@@ -125,19 +126,16 @@ class InstallingLibrary(object):
         self.install_dir_base = install_dir_base
         self.git_hash = None
 
-
     def BuildAndInstall(self) -> None:
         raise NotImplementedError
 
-
     def GetGitHash(self) -> str:
-        if self.git_hash == None:
+        if self.git_hash is None:
             self.git_hash = subprocess.run(
                 ["git", "-C", str(self.source_dir), "rev-parse", "HEAD"],
                 capture_output=True, text=True, check=True
             ).stdout.strip()
         return self.git_hash
-
 
     def CheckGitHash(self, hash_file: Path) -> bool:
         try:
@@ -146,21 +144,20 @@ class InstallingLibrary(object):
             log(f"Failed to get git hash for {self.source_dir}: {e}", LogType.Error)
         return False
 
-
     def IsHashRelevant(self, hash_file: Path) -> bool:
         if hash_file.exists() and self.CheckGitHash(hash_file):
             return True
         return False
 
-
     def WriteHash(self, hash_file) -> None:
         write_line_at(hash_file, 1, self.GetGitHash())
-
 
     def InstallLibrary(self) -> None:
         global SOURCES_ROOT, INSTALL_ROOT, CACHE_ROOT
 
-        hash_file: Path = (CACHE_ROOT / self.install_dir_base if CACHE_ROOT else self.install_dir) / f"hash_{self.lib_name}.txt"
+        hash_file: Path = (
+            CACHE_ROOT / self.install_dir_base if CACHE_ROOT else self.install_dir
+        ) / f"hash_{self.lib_name}.txt"
 
         if self.IsHashRelevant(hash_file):
             log(f"[{self.lib_name}] is up to date.")
@@ -171,7 +168,7 @@ class InstallingLibrary(object):
 
         log(f"Installing [{self.lib_name}]...")
 
-        # self.BuildAndInstall()
+        self.BuildAndInstall()
 
         self.WriteHash(hash_file)
 
@@ -186,9 +183,11 @@ def acquire_lock(lock_file: Path):
     try:
         if os.name == "nt":
             import msvcrt
+
             msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
         else:
             import fcntl
+
             fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
         return f
     except (OSError, BlockingIOError):
@@ -207,15 +206,14 @@ class CMakeLibrary(InstallingLibrary):
         self.build_folder = build_folder or Path("build")
         self.build_hash = None
 
-
     def GetBuildHash(self):
-        if self.build_hash == None:
+        if self.build_hash is None:
             import hashlib
+
             global CMAKE_GLOBAL_ARGS
-            data_str = '|'.join(self.extra_cmake_flags + CMAKE_GLOBAL_ARGS)
+            data_str = "|".join(self.extra_cmake_flags + CMAKE_GLOBAL_ARGS)
             self.build_hash = hashlib.md5(data_str.encode()).hexdigest()
         return self.build_hash
-
 
     def CheckBuildHash(self, hash_file: Path):
         try:
@@ -224,15 +222,12 @@ class CMakeLibrary(InstallingLibrary):
             log(f"Failed to get git hash for {self.source_dir}: {e}", LogType.Error)
         return False
 
-
     def IsHashRelevant(self, hash_file) -> bool:
         return super().IsHashRelevant(hash_file) and self.CheckBuildHash(hash_file)
-
 
     def WriteHash(self, hash_file) -> None:
         super().WriteHash(hash_file)
         write_line_at(hash_file, 2, self.GetBuildHash())
-
 
     def BuildAndInstall(self) -> None:
         log(f"Compiling [{self.lib_name}]...")
@@ -274,7 +269,7 @@ class CMakeLibrary(InstallingLibrary):
             subprocess.run(cmake_cmd, cwd=build_dir, check=True)
 
             # Build
-            build_cmd = [CMAKE, "--build", ".", "--config", "Release", "--parallel"] # todo: job count argument
+            build_cmd = [ CMAKE, "--build", ".", "--config", "Release", "--parallel" ] # todo: job count argument
             subprocess.run(build_cmd, cwd=build_dir, check=True)
         finally:
             if lock is not None:
@@ -306,7 +301,7 @@ def split_pattern(pattern: str) -> tuple[Path, str]:
     parts = Path(pattern).parts
 
     for i, part in enumerate(parts):
-        if any(ch in part for ch in '*?['):
+        if any(ch in part for ch in "*?["):
             fixed = Path(*parts[:i])
             sub = "/".join(parts[i:])
             return fixed, sub
@@ -316,7 +311,12 @@ def split_pattern(pattern: str) -> tuple[Path, str]:
 class ManualLibrary(InstallingLibrary):
     rules: list[tuple[str, str]]
 
-    def __init__(self, source_dir_base: Path, install_dir_base: Path, rules: list[tuple[str, str]] | None = None) -> None:
+    def __init__(
+        self,
+        source_dir_base: Path,
+        install_dir_base: Path,
+        rules: list[tuple[str, str]] | None = None,
+    ) -> None:
         super().__init__(source_dir_base, install_dir_base)
         self.rules = rules or []
 
@@ -374,6 +374,8 @@ def skip_if_missing(lib_folder: Path) -> bool:
 
 
 T = TypeVar("T", bound=InstallingLibrary)
+
+
 def install_libraries(libraries: list[T]) -> None:
     for library in libraries:
         if skip_if_missing(library.source_dir):
@@ -518,7 +520,13 @@ def main():
 
     args = parser.parse_args()
 
-    global SOURCES_ROOT, INSTALL_ROOT, CACHE_ROOT, HEADER_SUBDIR, CMAKE, CMAKE_GLOBAL_ARGS
+    global \
+        SOURCES_ROOT, \
+        INSTALL_ROOT, \
+        CACHE_ROOT, \
+        HEADER_SUBDIR, \
+        CMAKE, \
+        CMAKE_GLOBAL_ARGS
 
     SOURCES_ROOT = args.sources_dir
     INSTALL_ROOT = args.install_dir
@@ -542,6 +550,7 @@ def main():
         log("Nothing to do.")
     else:
         log("All libraries installed successfully", LogType.Success)
+
 
 if __name__ == "__main__":
     main()
