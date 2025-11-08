@@ -50,7 +50,7 @@ from typing import Generic, Optional, TypeVar
 
 SOURCES_ROOT: Path
 INSTALL_ROOT: Path
-CACHE_ROOT: Path
+CACHE_ROOT: Optional[Path]
 HEADER_SUBDIR: Path
 CMAKE: str
 CMAKE_GLOBAL_ARGS: list[str]
@@ -303,9 +303,9 @@ class CMakeLibrary(InstallingLibrary):
 
 
 class ManualLibrary(InstallingLibrary):
-    rules: list[tuple[str, str]]
+    rules: list[tuple[str, str, str]]
 
-    def __init__(self, source_dir_base: Path, install_dir_base: Path, rules: list[tuple[str, str]] | None = None) -> None:
+    def __init__(self, source_dir_base: Path, install_dir_base: Path, rules: list[tuple[str, str, str]] | None = None) -> None:
         super().__init__(source_dir_base, install_dir_base)
         self.rules = rules or []
 
@@ -330,7 +330,7 @@ class ManualLibrary(InstallingLibrary):
         return Path(*parts), ""
 
     def BuildAndInstall(self) -> None:
-        for pattern, dst_subdir in self.rules:
+        for pattern, dst_subdir, exclude_pattern in self.rules:
             fixed_prefix, sub_pattern = ManualLibrary._SplitPattern(pattern)
             glob_root = self.source_dir / fixed_prefix
 
@@ -339,17 +339,28 @@ class ManualLibrary(InstallingLibrary):
                 continue
 
             if glob_root.is_file():
+                if exclude_pattern != "":
+                    log(f"There is no need in exclude glob '{exclude_pattern}' if you copy path.\n"
+                        "Exclude glob excludes files only from glob.", LogType.Warning
+                    )
                 target = self.install_dir / dst_subdir / glob_root.name
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(glob_root, target)
                 continue
 
-            search_pattern = str(glob_root / sub_pattern)
-            matches = glob(search_pattern, recursive=True)
+            matches = set(Path(p) for p in glob(str(glob_root / sub_pattern), recursive=True))
 
-            for full_path in matches:
-                full_path = Path(full_path)
+            exclude_matches = set()
+            if exclude_pattern:
+                ex_fixed, ex_sub = ManualLibrary._SplitPattern(exclude_pattern)
+                ex_root = self.source_dir / ex_fixed
 
+                if ex_root.exists():
+                    exclude_matches = set(Path(p) for p in glob(str(ex_root / ex_sub), recursive=True))
+
+            to_copy = matches - exclude_matches
+
+            for full_path in to_copy:
                 try:
                     rel_path = full_path.relative_to(glob_root)
                 except ValueError:
@@ -371,30 +382,11 @@ class HeaderLibrary(ManualLibrary):
         super().__init__(
             source_dir_base,
             HEADER_SUBDIR,
-            [(p, str(install_dir_base)) for p in (paths or [])]
+            [(p, str(install_dir_base), "") for p in (paths or [])]
         )
 
 
-def skip_if_missing(lib_folder: Path) -> bool:
-    if not lib_folder.exists():
-        log(f"Source folder not found: {lib_folder}", LogType.Warning)
-        return True
-    return False
-
-
 T = TypeVar("T", bound=InstallingLibrary)
-def install_libraries(libraries: list[T]) -> None:
-    for library in libraries:
-        if skip_if_missing(library.source_dir):
-            continue
-
-        try:
-            library.InstallLibrary()
-        except subprocess.CalledProcessError:
-            log(f"Failed to build or install {library.lib_name}", LogType.Error)
-            sys.exit(1)
-
-
 class LibraryCommand(Generic[T]):
     parser: argparse.ArgumentParser
 
@@ -582,7 +574,7 @@ class ManualCommand(LibraryCommand[ManualLibrary]):
         return parser
 
     def _CreateLibrary(self, namespace: argparse.Namespace) -> ManualLibrary:
-        pairs = []
+        rules = []
         rule_args_list = namespace.rules
 
         rule_indices = [i for i, x in enumerate(rule_args_list) if x == 'rule']
@@ -599,9 +591,7 @@ class ManualCommand(LibraryCommand[ManualLibrary]):
 
             try:
                 rule_namespace = self.rule_parser.parse_args(rule_args)
-                if rule_namespace.ex:
-                    log(f"Note: --ex '{rule_namespace.ex}' parsed for {rule_namespace.src}, (logic to handle exclusion not implemented in this demo)", LogType.Warning)
-                pairs.append((rule_namespace.src, rule_namespace.dst))
+                rules.append((rule_namespace.src, rule_namespace.dst, rule_namespace.ex or ""))
             except Exception as e:
                 log(f"Failed to parse 'rule' args: {rule_args}. Error: {e}", LogType.Error)
                 sys.exit(1)
@@ -609,7 +599,7 @@ class ManualCommand(LibraryCommand[ManualLibrary]):
         return ManualLibrary(
             source_dir_base=Path(namespace.src),
             install_dir_base=Path(namespace.install),
-            rules=pairs
+            rules=rules
         )
 
 
@@ -638,7 +628,7 @@ def create_main_parser():
         help="Root directory for built library installations. (Default: 'bin/<platform>')"
     )
     main_parser.add_argument(
-        "--cache-dir", type=str, default="",
+        "--cache-dir", type=str, default=None,
         help="Directory for hash files. (Default: '<INSTALL_DIR>/<library_installation_folder>')"
     )
     main_parser.add_argument(
@@ -710,7 +700,7 @@ def main():
 
     SOURCES_ROOT = main_namespace.sources_dir
     INSTALL_ROOT = main_namespace.install_dir
-    CACHE_ROOT = Path(main_namespace.cache_dir)
+    CACHE_ROOT = Path(main_namespace.cache_dir) if main_namespace.cache_dir else None
     HEADER_SUBDIR = main_namespace.header_subdir
     CMAKE = main_namespace.cmake
 
@@ -736,7 +726,16 @@ def main():
 
     run_tests(main_namespace, libraries)
 
-    #install_libraries(libraries)
+    for library in libraries:
+        if not library.source_dir.exists():
+            log(f"Source folder not found: {library.source_dir}", LogType.Warning)
+            continue
+
+        try:
+            library.InstallLibrary()
+        except subprocess.CalledProcessError:
+            log(f"Failed to build or install {library.lib_name}", LogType.Error)
+            sys.exit(1)
 
     if not(libraries):
         log("Nothing to do.")
@@ -750,15 +749,20 @@ def run_tests(main_ns: argparse.Namespace, libraries: list):
     had_error = False
 
     try:
-        assert main_ns.cache_dir == "caches"
+        assert main_ns.cache_dir is None
         assert main_ns.sources_dir == Path("third_party/src")
         assert main_ns.cmake_args == '-G "Ninja Multi-Config" -DCMAKE_POLICY_DEFAULT_CMP0091=NEW'
         log("--- Global args test passed --", LogType.Success)
 
-        assert libraries[0].source_dir_base == Path("tinyobjloader")
-        assert libraries[0].install_dir_base == Path("header-only")
-        assert libraries[0].rules == [('tiny_obj_loader.h', '.')]
-        log("--- tol test passed ---", LogType.Success)
+        expected_pairs = [
+            ('redistributable_bin/**/*.dll', 'bin', ''),
+            ('public/steam/*.h', 'include/steam', 'public/steam/isteam*.h'),
+            ('public/steam/lib/**/*.dll', 'bin', '')
+        ]
+        assert libraries[0].source_dir_base == Path("SteamworksSDK")
+        assert libraries[0].install_dir_base == Path("SteamworksSDK")
+        assert libraries[0].rules == expected_pairs
+        log("--- steamsdk test passed ---", LogType.Success)
 
         assert libraries[1].source_dir_base == Path("SDL")
         assert libraries[1].install_dir_base == Path("SDL3")
@@ -766,26 +770,21 @@ def run_tests(main_ns: argparse.Namespace, libraries: list):
         assert libraries[1].extra_args == ['-DSDL_TEST_LIBRARY=OFF']
         log("--- sdl test passed ---", LogType.Success)
 
-        assert libraries[2].source_dir_base == Path("SDL_image")
-        assert libraries[2].install_dir_base == Path("SDL3_image")
-        assert libraries[2].build_dir == Path("build")
-        assert libraries[2].extra_args == ['-DSDLIMAGE_AVIF=OFF', '-DSDLIMAGE_WEBP=OFF']
+        assert libraries[2].source_dir_base == Path("tinyobjloader")
+        assert libraries[2].install_dir_base == Path("header-only")
+        assert libraries[2].rules == [('tiny_obj_loader.h', '.', '')]
+        log("--- tol test passed ---", LogType.Success)
+
+        assert libraries[3].source_dir_base == Path("SDL_image")
+        assert libraries[3].install_dir_base == Path("SDL3_image")
+        assert libraries[3].build_dir == Path("build")
+        assert libraries[3].extra_args == ['-DSDLIMAGE_AVIF=OFF', '-DSDLIMAGE_WEBP=OFF']
         log("--- sdl image test passed ---", LogType.Success)
 
-        assert libraries[3].source_dir_base == Path("simple_term_colors")
-        assert libraries[3].install_dir_base == Path("header-only")
-        assert libraries[3].rules == [('include/stc.hpp', '.')]
+        assert libraries[4].source_dir_base == Path("simple_term_colors")
+        assert libraries[4].install_dir_base == Path("header-only")
+        assert libraries[4].rules == [('include/stc.hpp', '.', '')]
         log("--- stc test passed ---", LogType.Success)
-
-        expected_pairs = [
-            ('redistributable_bin/**/*.dll', 'bin'),
-            ('public/steam/*.h', 'include/steam'),
-            ('public/steam/lib/**/*.dll', 'bin')
-        ]
-        assert libraries[4].source_dir_base == Path("SteamworksSDK")
-        assert libraries[4].install_dir_base == Path("SteamworksSDK")
-        assert libraries[4].rules == expected_pairs
-        log("--- steamsdk test passed ---", LogType.Success)
     except AssertionError as e:
         log("--- TEST FAILED ---", LogType.Error)
         print(f"Assertion Error: {e}")
@@ -800,20 +799,26 @@ def run_tests(main_ns: argparse.Namespace, libraries: list):
 if __name__ == "__main__":
     sys.argv = [
         'deps.py',
-        '--cache-dir=caches',
         '--sources-dir=third_party/src',
         '--install-dir=third_party/bin',
         '--cmake-args=-G "Ninja Multi-Config" -DCMAKE_POLICY_DEFAULT_CMP0091=NEW',
 
-        'add-header-lib',
-            '--src=tinyobjloader',
-            '--glob=tiny_obj_loader.h',
+        'add-manual-lib',
+            '--src=SteamworksSDK',
+            '--install=SteamworksSDK',
+            'rule', '--src=redistributable_bin/**/*.dll', '--dst', 'bin',
+            'rule', '--src=public/steam/*.h', '--dst', 'include/steam', '--ex', 'public/steam/isteam*.h',
+            'rule', '--src=public/steam/lib/**/*.dll', '--dst', 'bin',
 
         'add-cmake-lib',
             '--src=SDL',
             '--install=SDL3',
             '--build-dir=build_cmake',
             '--args=-DSDL_TEST_LIBRARY=OFF',
+
+        'add-header-lib',
+            '--src=tinyobjloader',
+            '--glob=tiny_obj_loader.h',
 
         'add-cmake-lib',
             '--src=SDL_image',
@@ -823,13 +828,6 @@ if __name__ == "__main__":
         'add-header-lib',
             '--src=simple_term_colors',
             '--glob=include/stc.hpp',
-
-        'add-manual-lib',
-            '--src=SteamworksSDK',
-            '--install=SteamworksSDK',
-            'rule', '--src=redistributable_bin/**/*.dll', '--dst', 'bin',
-            'rule', '--src=public/steam/*.h', '--dst', 'include/steam', '--ex', 'public/steam/isteam*.h',
-            'rule', '--src=public/steam/lib/**/*.dll', '--dst', 'bin'
     ]
 
     main()
