@@ -404,8 +404,7 @@ class LibraryCommand(Generic[T]):
 
     T = TypeVar("T", bound=InstallingLibrary)
     def CreateLibrary(self, args: list[str]) -> T:
-        namespace = self.Parse(args)
-        return self._CreateLibrary(namespace)
+        return self._CreateLibrary(self.Parse(args))
 
 
 class CMakeCommand(LibraryCommand[CMakeLibrary]):
