@@ -724,8 +724,6 @@ def main():
             log(f"Failed to process command: {' '.join(cmdline)}. Error: {e}", LogType.Error)
             sys.exit(1)
 
-    run_tests(main_namespace, libraries)
-
     for library in libraries:
         if not library.source_dir.exists():
             log(f"Source folder not found: {library.source_dir}", LogType.Warning)
@@ -743,91 +741,5 @@ def main():
         log("All libraries installed successfully", LogType.Success)
 
 
-def run_tests(main_ns: argparse.Namespace, libraries: list):
-    log("--- Running Parser Tests ---", LogType.Info)
-
-    had_error = False
-
-    try:
-        assert main_ns.cache_dir is None
-        assert main_ns.sources_dir == Path("third_party/src")
-        assert main_ns.cmake_args == '-G "Ninja Multi-Config" -DCMAKE_POLICY_DEFAULT_CMP0091=NEW'
-        log("--- Global args test passed --", LogType.Success)
-
-        expected_pairs = [
-            ('redistributable_bin/**/*.dll', 'bin', ''),
-            ('public/steam/*.h', 'include/steam', 'public/steam/isteam*.h'),
-            ('public/steam/lib/**/*.dll', 'bin', '')
-        ]
-        assert libraries[0].source_dir_base == Path("SteamworksSDK")
-        assert libraries[0].install_dir_base == Path("SteamworksSDK")
-        assert libraries[0].rules == expected_pairs
-        log("--- steamsdk test passed ---", LogType.Success)
-
-        assert libraries[1].source_dir_base == Path("SDL")
-        assert libraries[1].install_dir_base == Path("SDL3")
-        assert libraries[1].build_dir == Path("build_cmake")
-        assert libraries[1].extra_args == ['-DSDL_TEST_LIBRARY=OFF']
-        log("--- sdl test passed ---", LogType.Success)
-
-        assert libraries[2].source_dir_base == Path("tinyobjloader")
-        assert libraries[2].install_dir_base == Path("header-only")
-        assert libraries[2].rules == [('tiny_obj_loader.h', '.', '')]
-        log("--- tol test passed ---", LogType.Success)
-
-        assert libraries[3].source_dir_base == Path("SDL_image")
-        assert libraries[3].install_dir_base == Path("SDL3_image")
-        assert libraries[3].build_dir == Path("build")
-        assert libraries[3].extra_args == ['-DSDLIMAGE_AVIF=OFF', '-DSDLIMAGE_WEBP=OFF']
-        log("--- sdl image test passed ---", LogType.Success)
-
-        assert libraries[4].source_dir_base == Path("simple_term_colors")
-        assert libraries[4].install_dir_base == Path("header-only")
-        assert libraries[4].rules == [('include/stc.hpp', '.', '')]
-        log("--- stc test passed ---", LogType.Success)
-    except AssertionError as e:
-        log("--- TEST FAILED ---", LogType.Error)
-        print(f"Assertion Error: {e}")
-        had_error = True
-
-    if had_error:
-        log("One or more test failed.", LogType.Error)
-        sys.exit(1)
-    else:
-        log("--- All Parser Tests Passed ---", LogType.Success)
-
 if __name__ == "__main__":
-    sys.argv = [
-        'deps.py',
-        '--sources-dir=third_party/src',
-        '--install-dir=third_party/bin',
-        '--cmake-args=-G "Ninja Multi-Config" -DCMAKE_POLICY_DEFAULT_CMP0091=NEW',
-
-        'add-manual-lib',
-            '--src=SteamworksSDK',
-            '--install=SteamworksSDK',
-            'rule', '--src=redistributable_bin/**/*.dll', '--dst', 'bin',
-            'rule', '--src=public/steam/*.h', '--dst', 'include/steam', '--ex', 'public/steam/isteam*.h',
-            'rule', '--src=public/steam/lib/**/*.dll', '--dst', 'bin',
-
-        'add-cmake-lib',
-            '--src=SDL',
-            '--install=SDL3',
-            '--build-dir=build_cmake',
-            '--args=-DSDL_TEST_LIBRARY=OFF',
-
-        'add-header-lib',
-            '--src=tinyobjloader',
-            '--glob=tiny_obj_loader.h',
-
-        'add-cmake-lib',
-            '--src=SDL_image',
-            '--install=SDL3_image',
-            '--args=-DSDLIMAGE_AVIF=OFF -DSDLIMAGE_WEBP=OFF',
-
-        'add-header-lib',
-            '--src=simple_term_colors',
-            '--glob=include/stc.hpp',
-    ]
-
     main()
