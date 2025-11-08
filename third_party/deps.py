@@ -2,24 +2,37 @@
 
 # Example of usage:
 # python deps.py \
-#   --cache-dir caches \
-#   --cmake-lib VulkanMemoryAllocator-Hpp/Vulkan-Headers VulkanHeaders build "-DVULKAN_HEADERS_ENABLE_TESTS=OFF -DVULKAN-HEADERS_ENABLE_MODULE=ON" \
-#   --cmake-lib VulkanMemoryAllocator-Hpp/VulkanMemoryAllocator VulkanMemoryAllocator build "-DVMA_BUILD_DOCUMENTATION=OFF -DVMA_BUILD_SAMPLES=OFF -DVMA_ENABLE_INSTALL=ON" \
-#   --cmake-lib VulkanMemoryAllocator-Hpp VulkanMemoryAllocator-Hpp build "-DVMA_HPP_ENABLE_INSTALL=ON" \
-#   --cmake-lib SDL SDL3 build "-DSDL_TEST_LIBRARY=OFF" \
-#   --cmake-lib SDL_image SDL3_image build "-DSDLIMAGE_AVIF=OFF -DSDLIMAGE_LBM=OFF -DSDLIMAGE_PCX=OFF -DSDLIMAGE_TIF=OFF -DSDLIMAGE_XCF=OFF -DSDLIMAGE_XPM=OFF -DSDLIMAGE_XV=OFF -DSDLIMAGE_WEBP=OFF" \
-#   --header-lib tinyobjloader "" tiny_obj_loader.h \
-#   --header-lib simple_term_colors "" include/stc.hpp \
-#   --manual-lib SteamworksSDK SteamworksSDK \
-#       "redistributable_bin/**/*.dll" bin \
-#       "public/steam/lib/**/*.dll" bin \
-#       "public/steam/*.h" include/steam \
-#       "redistributable_bin/**/*.lib" lib \
-#       "redistributable_bin/**/*.so" lib \
-#       "redistributable_bin/**/*.dylib" lib \
-#       "public/steam/lib/**/*.lib" lib \
-#       "public/steam/lib/**/*.so" lib \
-#       "public/steam/lib/**/*.dylib" lib
+#   --cache-dir=caches \
+#   --sources-dir=third_party/src \
+#   --install-dir=third_party/bin \
+#   --cmake-args='-G "Ninja Multi-Config" -DCMAKE_POLICY_DEFAULT_CMP0091=NEW' \
+#   add-header-lib \
+#     --src=tinyobjloader \
+#     --glob=tiny_obj_loader.h \
+#   add-cmake-lib \
+#     --src=SDL \
+#     --install=SDL3 \
+#     --build-dir=build_cmake \
+#     --args=-DSDL_TEST_LIBRARY=OFF \
+#   add-cmake-lib \
+#     --src=SDL_image \
+#     --install=SDL3_image \
+#     --args='-DSDLIMAGE_AVIF=OFF -DSDLIMAGE_WEBP=OFF' \
+#   add-header-lib \
+#     --src=simple_term_colors \
+#     --glob=include/stc.hpp \
+#   add-manual-lib \
+#     --src=SteamworksSDK \
+#     --install=SteamworksSDK \
+#       rule --src='redistributable_bin/**/*.dll'    --dst=bin \
+#       rule --src='public/steam/lib/**/*.dll'       --dst=bin \
+#       rule --src='public/steam/*.h'                --dst=include/steam \
+#       rule --src='redistributable_bin/**/*.lib'    --dst=lib \
+#       rule --src='redistributable_bin/**/*.so'     --dst=lib \
+#       rule --src='redistributable_bin/**/*.dylib'  --dst=lib \
+#       rule --src='public/steam/lib/**/*.lib'       --dst=lib \
+#       rule --src='public/steam/lib/**/*.so'        --dst=lib \
+#       rule --src='public/steam/lib/**/*.dylib'     --dst=lib
 
 
 import argparse
