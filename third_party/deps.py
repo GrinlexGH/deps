@@ -64,7 +64,7 @@ class TerminalColors:
     FAIL = "\033[91m"
     ENDC = "\033[0m"
 
-
+# TODO: more logging
 CURRENT_LOG_LEVEL: LogLevel = LogLevel.Normal
 
 
@@ -715,12 +715,9 @@ def main():
             log(f"No arguments passed to {cmd_name}", LogType.Warning)
             continue
 
-        command_handler = COMMAND_MAP[cmd_name]()
-
         try:
-            command_args = cmdline[1:]
-            lib = command_handler.CreateLibrary(command_args)
-            libraries.append(lib)
+            command_handler = COMMAND_MAP[cmd_name]()
+            libraries.append(command_handler.CreateLibrary(cmdline[1:]))
         except Exception as e:
             log(f"Failed to process command: {' '.join(cmdline)}. Error: {e}", LogType.Error)
             sys.exit(1)
