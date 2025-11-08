@@ -140,7 +140,7 @@ class InstallingLibrary(object):
 
     def CheckGitHash(self, hash_file: Path) -> bool:
         try:
-            return self.GetGitHash() == InstallingLibrary.ReadLineAt(hash_file, 1)
+            return self.GetGitHash() == self.ReadLineAt(hash_file, 1)
         except subprocess.CalledProcessError as e:
             log(f"Failed to get git hash for {self.source_dir}: {e}", LogType.Error)
         return False
@@ -151,7 +151,7 @@ class InstallingLibrary(object):
         return False
 
     def WriteHash(self, hash_file) -> None:
-        InstallingLibrary.WriteLineAt(hash_file, 1, self.GetGitHash())
+        self.WriteLineAt(hash_file, 1, self.GetGitHash())
 
     def InstallLibrary(self) -> None:
         global SOURCES_ROOT, INSTALL_ROOT, CACHE_ROOT
