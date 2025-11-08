@@ -218,7 +218,7 @@ class CMakeLibrary(InstallingLibrary):
 
     def CheckBuildHash(self, hash_file: Path):
         try:
-            return self.GetBuildHash() == read_line_at(hash_file, 2)
+            return self.GetBuildHash() == self.ReadLineAt(hash_file, 2)
         except subprocess.CalledProcessError as e:
             log(f"Failed to get git hash for {self.source_dir}: {e}", LogType.Error)
         return False
@@ -228,7 +228,7 @@ class CMakeLibrary(InstallingLibrary):
 
     def WriteHash(self, hash_file) -> None:
         super().WriteHash(hash_file)
-        write_line_at(hash_file, 2, self.GetBuildHash())
+        self.WriteLineAt(hash_file, 2, self.GetBuildHash())
 
     def BuildAndInstall(self) -> None:
         log(f"Compiling [{self.lib_name}]...")
