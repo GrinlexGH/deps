@@ -292,8 +292,8 @@ function(deps_build_all)
     set(DEPS_INSTALL_CMD
         "${DEPS_PYTHON}"
         "${DEPS_SCRIPT_PATH}"
-        "--sources-dir" "${DEPS_SOURCES_DIR}"
-        "--install-dir" "${DEPS_INSTALL_DIR}"
+        "--sources-dir=${DEPS_SOURCES_DIR}"
+        "--install-dir=${DEPS_INSTALL_DIR}"
         "${_deps_internal_cmd_args}"
     )
 

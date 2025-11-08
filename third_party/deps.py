@@ -23,6 +23,7 @@
 
 
 import argparse
+import itertools
 import os
 import platform
 import shlex
@@ -32,7 +33,7 @@ import sys
 from enum import IntEnum
 from glob import glob
 from pathlib import Path
-from typing import TypeVar, Optional
+from typing import Generic, Optional, TypeVar
 
 SOURCES_ROOT: Path
 INSTALL_ROOT: Path
@@ -81,35 +82,6 @@ def log(message, log_type: LogType = LogType.Info, log_level: LogLevel = LogLeve
         print(f"{TerminalColors.OKBLUE}{message}{TerminalColors.ENDC}", flush=True)
 
 
-def write_line_at(path: Path, n: int, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    if path.exists():
-        with path.open("r", encoding="utf-8") as f:
-            lines = f.readlines()
-    else:
-        lines = []
-
-    while len(lines) < n:
-        lines.append("\n")
-
-    lines[n - 1] = text.rstrip("\n") + "\n"
-    with path.open("w", encoding="utf-8") as f:
-        f.writelines(lines)
-
-
-def read_line_at(path: Path, n: int) -> Optional[str]:
-    if not path.exists():
-        return None
-
-    with path.open("r", encoding="utf-8") as f:
-        for i, line in enumerate(f, start=1):
-            if i == n:
-                return line.rstrip("\n")
-
-    return None
-
-
 class InstallingLibrary(object):
     lib_name: str
     source_dir: Path
@@ -126,6 +98,35 @@ class InstallingLibrary(object):
         self.install_dir_base = install_dir_base
         self.git_hash = None
 
+    @staticmethod
+    def WriteLineAt(path: Path, n: int, text: str) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        if path.exists():
+            with path.open("r", encoding="utf-8") as f:
+                lines = f.readlines()
+        else:
+            lines = []
+
+        while len(lines) < n:
+            lines.append("\n")
+
+        lines[n - 1] = text.rstrip("\n") + "\n"
+        with path.open("w", encoding="utf-8") as f:
+            f.writelines(lines)
+
+    @staticmethod
+    def ReadLineAt(path: Path, n: int) -> Optional[str]:
+        if not path.exists():
+            return None
+
+        with path.open("r", encoding="utf-8") as f:
+            for i, line in enumerate(f, start=1):
+                if i == n:
+                    return line.rstrip("\n")
+
+        return None
+
     def BuildAndInstall(self) -> None:
         raise NotImplementedError
 
@@ -139,7 +140,7 @@ class InstallingLibrary(object):
 
     def CheckGitHash(self, hash_file: Path) -> bool:
         try:
-            return self.GetGitHash() == read_line_at(hash_file, 1)
+            return self.GetGitHash() == InstallingLibrary.ReadLineAt(hash_file, 1)
         except subprocess.CalledProcessError as e:
             log(f"Failed to get git hash for {self.source_dir}: {e}", LogType.Error)
         return False
@@ -150,7 +151,7 @@ class InstallingLibrary(object):
         return False
 
     def WriteHash(self, hash_file) -> None:
-        write_line_at(hash_file, 1, self.GetGitHash())
+        InstallingLibrary.WriteLineAt(hash_file, 1, self.GetGitHash())
 
     def InstallLibrary(self) -> None:
         global SOURCES_ROOT, INSTALL_ROOT, CACHE_ROOT
@@ -175,43 +176,43 @@ class InstallingLibrary(object):
         log(f"[{self.lib_name}] installed.", LogType.Success)
 
 
-# For parallel work of this script we need to lock the build dir
-def acquire_lock(lock_file: Path):
-    lock_file.parent.mkdir(parents=True, exist_ok=True)
-    f = open(lock_file, "w")
-
-    try:
-        if os.name == "nt":
-            import msvcrt
-
-            msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
-        else:
-            import fcntl
-
-            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        return f
-    except (OSError, BlockingIOError):
-        f.close()
-        return None
-
-
 class CMakeLibrary(InstallingLibrary):
-    build_folder: Path
-    extra_cmake_flags: list[str]
+    build_dir: Path
+    extra_args: list[str]
     build_hash: Optional[str]
 
-    def __init__(self, source_dir_base: Path, install_dir_base: Path, build_folder: Path | None = None, extra_cmake_flags: list[str] | None = None) -> None:
+    def __init__(self, source_dir_base: Path, install_dir_base: Path, build_dir: Path | None = None, extra_args: list[str] | None = None) -> None:
         super().__init__(source_dir_base, install_dir_base)
-        self.extra_cmake_flags = extra_cmake_flags or []
-        self.build_folder = build_folder or Path("build")
+        self.extra_args = extra_args or []
+        self.build_dir = build_dir or Path("build")
         self.build_hash = None
+
+    # For parallel work of this script we need to lock the build dir
+    @staticmethod
+    def _AcquireLock(lock_file: Path):
+        lock_file.parent.mkdir(parents=True, exist_ok=True)
+        f = open(lock_file, "w")
+
+        try:
+            if os.name == "nt":
+                import msvcrt
+
+                msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return f
+        except (OSError, BlockingIOError):
+            f.close()
+            return None
 
     def GetBuildHash(self):
         if self.build_hash is None:
             import hashlib
 
             global CMAKE_GLOBAL_ARGS
-            data_str = "|".join(self.extra_cmake_flags + CMAKE_GLOBAL_ARGS)
+            data_str = "|".join(self.extra_args + CMAKE_GLOBAL_ARGS)
             self.build_hash = hashlib.md5(data_str.encode()).hexdigest()
         return self.build_hash
 
@@ -233,7 +234,7 @@ class CMakeLibrary(InstallingLibrary):
         log(f"Compiling [{self.lib_name}]...")
 
         # Prepare build dir to allow multiple instance of this script at one time
-        build_dir: Path = self.source_dir / self.build_folder
+        build_dir: Path = self.source_dir / self.build_dir
         n = 0
         lock = None
 
@@ -241,7 +242,7 @@ class CMakeLibrary(InstallingLibrary):
             # Lock directory
             while True:
                 lock_file = build_dir / ".lock"
-                lock = acquire_lock(lock_file)
+                lock = CMakeLibrary._AcquireLock(lock_file)
                 if lock is not None:
                     # Delete all files and folders except .lock file
                     for item in build_dir.iterdir():
@@ -255,7 +256,7 @@ class CMakeLibrary(InstallingLibrary):
                 else:
                     # Use build-{n} folder instead
                     n += 1
-                    build_dir = self.source_dir / f"{self.build_folder}-{n}"
+                    build_dir = self.source_dir / f"{self.build_dir}-{n}"
 
             # Configure
             cmake_cmd = [
@@ -264,7 +265,7 @@ class CMakeLibrary(InstallingLibrary):
                 f"-DCMAKE_INSTALL_PREFIX={self.install_dir}",
                 f"-DCMAKE_PREFIX_PATH={INSTALL_ROOT}",
                 ".."
-            ] + self.extra_cmake_flags + CMAKE_GLOBAL_ARGS
+            ] + self.extra_args + CMAKE_GLOBAL_ARGS
 
             subprocess.run(cmake_cmd, cwd=build_dir, check=True)
 
@@ -288,26 +289,6 @@ class CMakeLibrary(InstallingLibrary):
         shutil.rmtree(build_dir)
 
 
-def split_pattern(pattern: str) -> tuple[Path, str]:
-    """
-    Splits a path pattern into a fixed prefix and a wildcard sub-pattern.
-    `fixed_prefix` is the path up to (but not including) the first part containing a wildcard (*, ?, [).
-    `sub_pattern` is the remaining part of the path starting from the first wildcard.
-
-    Example:
-    `"redistributable_bin/**/*.dll"` ->
-    `(Path("redistributable_bin"), "**/*.dll")`
-    """
-    parts = Path(pattern).parts
-
-    for i, part in enumerate(parts):
-        if any(ch in part for ch in "*?["):
-            fixed = Path(*parts[:i])
-            sub = "/".join(parts[i:])
-            return fixed, sub
-    return Path(*parts), ""
-
-
 class ManualLibrary(InstallingLibrary):
     rules: list[tuple[str, str]]
 
@@ -315,9 +296,29 @@ class ManualLibrary(InstallingLibrary):
         super().__init__(source_dir_base, install_dir_base)
         self.rules = rules or []
 
+    @staticmethod
+    def _SplitPattern(pattern: str) -> tuple[Path, str]:
+        """
+        Splits a path pattern into a fixed prefix and a wildcard sub-pattern.
+        `fixed_prefix` is the path up to (but not including) the first part containing a wildcard (*, ?, [).
+        `sub_pattern` is the remaining part of the path starting from the first wildcard.
+
+        Example:
+        `"redistributable_bin/**/*.dll"` ->
+        `(Path("redistributable_bin"), "**/*.dll")`
+        """
+        parts = Path(pattern).parts
+
+        for i, part in enumerate(parts):
+            if any(ch in part for ch in "*?["):
+                fixed = Path(*parts[:i])
+                sub = "/".join(parts[i:])
+                return fixed, sub
+        return Path(*parts), ""
+
     def BuildAndInstall(self) -> None:
         for pattern, dst_subdir in self.rules:
-            fixed_prefix, sub_pattern = split_pattern(pattern)
+            fixed_prefix, sub_pattern = ManualLibrary._SplitPattern(pattern)
             glob_root = self.source_dir / fixed_prefix
 
             if not glob_root.exists():
@@ -369,8 +370,6 @@ def skip_if_missing(lib_folder: Path) -> bool:
 
 
 T = TypeVar("T", bound=InstallingLibrary)
-
-
 def install_libraries(libraries: list[T]) -> None:
     for library in libraries:
         if skip_if_missing(library.source_dir):
@@ -383,138 +382,289 @@ def install_libraries(libraries: list[T]) -> None:
             sys.exit(1)
 
 
-def parse_cmake_libs(args_list: list[list[str]]) -> list[CMakeLibrary]:
-    libs: list[CMakeLibrary] = []
+class LibraryCommand(Generic[T]):
+    parser: argparse.ArgumentParser
 
-    for group in args_list:
-        if len(group) != 4:
-            log(f"Invalid --cmake-lib syntax: {group}", LogType.Error)
-            sys.exit(1)
+    def __init__(self, parser: argparse.ArgumentParser):
+        self.parser = parser
 
-        source_dir_base = group[0]
-        install_dir_base = group[1]
-        build_dir = group[2]
+    @staticmethod
+    def GetName() -> str:
+        raise NotImplementedError
+
+    @staticmethod
+    def GetLibType() -> type[T]:
+        raise NotImplementedError
+
+    def Parse(self, args: list[str]) -> argparse.Namespace:
+        return self.parser.parse_args(args)
+
+    def _CreateLibrary(self, namespace: argparse.Namespace) -> T:
+        raise NotImplementedError
+
+    T = TypeVar("T", bound=InstallingLibrary)
+    def CreateLibrary(self, args: list[str]) -> T:
+        namespace = self.Parse(args)
+        return self._CreateLibrary(namespace)
+
+
+class CMakeCommand(LibraryCommand[CMakeLibrary]):
+    def __init__(self):
+        super().__init__(self._CreateParser())
+
+    @staticmethod
+    def GetName() -> str:
+        return "add-cmake-lib"
+
+    @staticmethod
+    def GetLibType() -> type[CMakeLibrary]:
+        return CMakeLibrary
+
+    def _CreateParser(self) -> argparse.ArgumentParser:
+        parser = argparse.ArgumentParser(
+            prog='add-cmake-lib',
+            description=(
+                "Add a CMake-based library to build and install.\n"
+                "This command defines a single library that will be configured, built,\n"
+                "and installed using CMake."
+            ),
+            formatter_class=type('CustomFormatter', (argparse.ArgumentDefaultsHelpFormatter, argparse.RawTextHelpFormatter), {})
+        )
+        parser.add_argument(
+            '--src', type=str, required=True,
+            help="Source subfolder (relative to --sources-dir)."
+        )
+        parser.add_argument(
+            '--install', type=str, default="",
+            help="Install subfolder (relative to --install-dir). (Default: same as --src)"
+        )
+        parser.add_argument(
+            '--build-dir', type=str, default="build",
+            help="CMake build subfolder (relative to --src). (Default: 'build')"
+        )
+        parser.add_argument(
+            '--args', type=str, default="",
+            help="Extra CMake configure arguments (as a single quoted string)."
+        )
+        return parser
+
+    def _CreateLibrary(self, namespace: argparse.Namespace) -> CMakeLibrary:
         try:
-            extra_cmake_args = shlex.split(group[3])
+            extra_cmake_args = shlex.split(namespace.args)
         except ValueError as e:
-            log(f"Failed to parse cmake args for {source_dir_base}: {e}", LogType.Error)
+            log(f"Failed to parse cmake args for {namespace.src}: {e}", LogType.Error)
             sys.exit(1)
 
-        libs.append(CMakeLibrary(Path(source_dir_base), Path(install_dir_base), Path(build_dir), extra_cmake_args))
+        return CMakeLibrary(
+            source_dir_base=Path(namespace.src),
+            install_dir_base=Path(namespace.install),
+            build_dir=Path(namespace.build_dir),
+            extra_args=extra_cmake_args
+        )
 
-    return libs
+
+class HeaderCommand(LibraryCommand[HeaderLibrary]):
+    def __init__(self):
+        super().__init__(self._CreateParser())
+
+    @staticmethod
+    def GetName() -> str:
+        return "add-header-lib"
+
+    @staticmethod
+    def GetLibType() -> type[HeaderLibrary]:
+        return HeaderLibrary
+
+    def _CreateParser(self) -> argparse.ArgumentParser:
+        parser = argparse.ArgumentParser(
+            prog='add-header-lib',
+            description=(
+                "Install a header-only library.\n"
+                "This command copies header files from a source directory to the \n"
+                "installation tree using glob patterns."
+            ),
+            formatter_class=type('CustomFormatter', (argparse.ArgumentDefaultsHelpFormatter, argparse.RawTextHelpFormatter), {})
+        )
+        parser.add_argument(
+            '--src', type=str, required=True,
+            help="Source subfolder (relative to --sources-dir)."
+        )
+        parser.add_argument(
+            '--install-subdir', type=str, default="",
+            help="Install subfolder (relative to --header-subdir). (Default: root of --header-subdir)"
+        )
+        parser.add_argument(
+            '--glob', type=str, required=True, action='append',
+            help="Glob pattern for headers. Can be used multiple times."
+        )
+        return parser
+
+    def _CreateLibrary(self, namespace: argparse.Namespace) -> HeaderLibrary:
+        return HeaderLibrary(
+            source_dir_base=Path(namespace.src),
+            install_dir_base=Path(namespace.install_subdir),
+            paths=namespace.glob
+        )
 
 
-def parse_header_libs(args_list: list[list[str]]) -> list[HeaderLibrary]:
-    libs = []
+class ManualCommand(LibraryCommand[ManualLibrary]):
+    rule_parser: argparse.ArgumentParser
 
-    for group in args_list:
-        if len(group) < 3:
-            log(f"Invalid --header-lib syntax: {group}", LogType.Error)
+    def __init__(self):
+        self.rule_parser = self._CreateRulesParser()
+        super().__init__(self._CreateParser())
+
+    @staticmethod
+    def GetName() -> str:
+        return "add-manual-lib"
+
+    @staticmethod
+    def GetLibType() -> type[ManualLibrary]:
+        return ManualLibrary
+
+    def _CreateParser(self) -> argparse.ArgumentParser:
+        parser = argparse.ArgumentParser(
+            prog='add-manual-lib',
+            description=(
+                "Define manual copy/install rules for a library.\n"
+                "This command uses one or more 'rule' sub-commands to copy files\n"
+                "and preserve directory structures.\n\n"
+
+                "When copying directories that include wildcards, a constant prefix is ignored.\n"
+                "For example, the rule --src 'redistributable_bin/**/*.dll' --install 'bin' will copy 'steam_api64.dll' located at\n"
+                "<SOURCE_SUBDIR>/redistributable_bin/win64 into <INSTALL_SUBDIR>/win64/bin."
+            ),
+            formatter_class=argparse.RawTextHelpFormatter
+        )
+        parser.add_argument(
+            '--src', type=str, required=True,
+            help="Source subfolder (relative to --sources-dir)."
+        )
+        parser.add_argument(
+            '--install', type=str, required=True,
+            help="Install subfolder (relative to --install-dir)."
+        )
+        parser.add_argument(
+            'rules', nargs=argparse.REMAINDER,
+            help="A list of 'rule' sub-commands. (See '... rule --help' for details)"
+        )
+        return parser
+
+    def _CreateRulesParser(self) -> argparse.ArgumentParser:
+        parser = argparse.ArgumentParser(
+            prog='rule',
+            description="Defines a single file copy rule for 'add-manual-lib'."
+        )
+        parser.add_argument(
+            '--src', type=str, required=True,
+            help="Source glob pattern (relative to parent's --src)."
+        )
+        parser.add_argument(
+            '--dst', type=str, required=True,
+            help="Destination subfolder (relative to parent's --install)."
+        )
+        parser.add_argument(
+            '--ex', type=str, default=None,
+            help="Glob pattern for files/dirs to exclude from this rule."
+        )
+        return parser
+
+    def _CreateLibrary(self, namespace: argparse.Namespace) -> ManualLibrary:
+        pairs = []
+        rule_args_list = namespace.rules
+
+        rule_indices = [i for i, x in enumerate(rule_args_list) if x == 'rule']
+
+        if not rule_indices or rule_args_list[0] != 'rule':
+            log(f"Invalid --manual-lib syntax for {namespace.src}. Expected 'rule' sub-commands.", LogType.Error)
             sys.exit(1)
 
-        source_subdir = group[0]
-        install_subdir = group[1]
-        paths = group[2:]
+        for i in range(len(rule_indices)):
+            # Get one rule
+            start = rule_indices[i] + 1
+            end = rule_indices[i+1] if (i + 1) < len(rule_indices) else len(rule_args_list)
+            rule_args = rule_args_list[start:end]
 
-        libs.append(HeaderLibrary(Path(source_subdir), Path(install_subdir), paths))
+            try:
+                rule_namespace = self.rule_parser.parse_args(rule_args)
+                if rule_namespace.ex:
+                    log(f"Note: --ex '{rule_namespace.ex}' parsed for {rule_namespace.src}, (logic to handle exclusion not implemented in this demo)", LogType.Warning)
+                pairs.append((rule_namespace.src, rule_namespace.dst))
+            except Exception as e:
+                log(f"Failed to parse 'rule' args: {rule_args}. Error: {e}", LogType.Error)
+                sys.exit(1)
 
-    return libs
-
-
-def parse_manual_install_libs(args_list: list[list[str]]) -> list[ManualLibrary]:
-    libs = []
-
-    for group in args_list:
-        if len(group) < 4 or len(group[2:]) % 2 != 0:
-            log(f"Invalid --manual-lib syntax: {group}", LogType.Error)
-            sys.exit(1)
-
-        source_subdir = group[0]
-        install_subdir = group[1]
-        pairs = [(group[i], group[i + 1]) for i in range(2, len(group), 2)]
-
-        libs.append(ManualLibrary(Path(source_subdir), Path(install_subdir), pairs))
-
-    return libs
+        return ManualLibrary(
+            source_dir_base=Path(namespace.src),
+            install_dir_base=Path(namespace.install),
+            rules=pairs
+        )
 
 
-# todo: add --parallel argument for parallel build
-def main():
-    parser = argparse.ArgumentParser(
+def register_commands() -> list[type[LibraryCommand]]:
+    return [
+        CMakeCommand,
+        HeaderCommand,
+        ManualCommand
+    ]
+
+
+def create_main_parser():
+    main_parser = argparse.ArgumentParser(
         description=(
             "Universal dependency builder and installer.\n"
             "Builds and installs third-party libraries from source into a local output tree."
         ),
         formatter_class=type('CustomFormatter', (argparse.ArgumentDefaultsHelpFormatter, argparse.RawTextHelpFormatter), {})
     )
-
-    parser.add_argument(
+    main_parser.add_argument(
         "--sources-dir", type=Path, default=Path("src"),
-        help="Path that contains library source directories."
+        help="Root directory containing library source code. (Default: 'src')"
     )
-    parser.add_argument(
+    main_parser.add_argument(
         "--install-dir", type=Path, default=Path("bin") / platform.system(),
-        help="Installation output directory. Default is 'bin/<Platform>'."
+        help="Root directory for built library installations. (Default: 'bin/<platform>')"
     )
-    parser.add_argument(
+    main_parser.add_argument(
         "--cache-dir", type=str, default="",
-        help="Directory used for caching (e.g. git hash cache)."
+        help="Directory for hash files. (Default: '<INSTALL_DIR>/<library_installation_folder>')"
     )
-    parser.add_argument(
+    main_parser.add_argument(
         "--cmake", type=str, default="cmake",
-        help="Path to the CMake executable to use for CMake-based libraries."
+        help="Path to the CMake executable. (Default: 'cmake')"
     )
-    parser.add_argument(
+    main_parser.add_argument(
         "--cmake-args", type=str, default="",
-        help=(
-            "Global CMake arguments applied to all libraries. "
-            "Provide as a single quoted string, e.g. '-G \"Ninja\" -DCMAKE_TOOLCHAIN_FILE=...'."
-        )
+        help="Global CMake arguments (as a single quoted string) applied to all libraries."
     )
-    parser.add_argument(
-        "--cmake-lib", nargs=4, action="append",
-        metavar=("SOURCE_SUBDIR", "INSTALL_SUBDIR", "BUILD_SUBDIR", "CMAKE_CONFIGURE_ARGS"),
-        help=(
-            "Add a CMake-based library to build and install. This option may be repeated.\n\n"
-            "Arguments (in order):\n"
-            "  SOURCE_SUBDIR         - subfolder inside <SOURCES_DIR> that contains the library source.\n"
-            "  INSTALL_SUBDIR        - subfolder inside <INSTALL_DIR> where installed files will be placed.\n"
-            "  BUILD_SUBDIR          - subfolder inside SOURCE_SUBDIR where CMake build files are generated.\n"
-            "  CMAKE_CONFIGURE_ARGS  - quoted CMake configure options passed as a single argument."
-        )
-    )
-    parser.add_argument(
+    main_parser.add_argument(
         "--header-subdir", type=Path, default=Path("header-only"),
-        help="Subdirectory under <INSTALL_DIR> where header-only libraries will be installed."
-    )
-    parser.add_argument(
-        "--header-lib", nargs="+", action="append", metavar="ARGS",
-        help=(
-            "Install a header-only library. This option may be repeated.\n\n"
-            "Format: SOURCE_SUBDIR INSTALL_SUBDIR <HEADER_GLOB> [<HEADER_GLOB> ...]\n"
-            "  SOURCE_SUBDIR  - subfolder under <SOURCES_DIR> containing the headers.\n"
-            "  INSTALL_SUBDIR - destination subfolder under <HEADER_SUBDIR>.\n"
-            "  HEADER_GLOB    - one or more glob patterns selecting header files to install."
-        )
-    )
-    parser.add_argument(
-        "--manual-lib", nargs="+", action="append", metavar="ARGS",
-        help=(
-            "Define manual copy/install rules. This option may be repeated.\n\n"
-            "Format: SOURCE_SUBDIR INSTALL_SUBDIR <pattern1> <dst1> [<pattern2> <dst2> ...]\n"
-            "  SOURCE_SUBDIR  - subfolder under <SOURCES_DIR> containing files to copy.\n"
-            "  INSTALL_SUBDIR - destination subfolder under <INSTALL_DIR>.\n"
-            "  patternN dstN  - file glob pattern (relative to SOURCE_SUBDIR) and the destination subfolder\n"
-            "                   (relative to INSTALL_SUBDIR) where matches will be copied.\n\n"
-            "Wildcards are supported. When copying directories that include wildcards, a constant prefix is ignored.\n"
-            "For example, the rule 'redistributable_bin/**/*.dll' 'bin' will copy 'steam_api64.dll' located at\n"
-            "<SOURCE_SUBDIR>/redistributable_bin/win64 into <INSTALL_SUBDIR>/win64/bin."
-        )
+        help="Subdirectory under <INSTALL_DIR> for header-only libraries. (Default: 'header-only')"
     )
 
-    args = parser.parse_args()
+    return main_parser
 
+
+# For every argument from sys.argv, this function returns a grouping key (count, cmd).
+# The key stays the same for all consecutive arguments belonging to the same command.
+# When a new command token is encountered, 'count' is incremented (indicating that
+# this is other group) and 'cmd' changes. itertools.groupby() will then group
+# arguments until the key changes, effectively collecting each command with its
+# parameters into a separate list.
+def groupargs(arg, state={'cmd': None, 'count': 0}, known_commands: list[str] | None = None):
+    if arg in known_commands:
+        state['cmd'] = arg
+        state['count'] += 1
+    elif state['cmd'] is None:
+        state['cmd'] = 'global'
+        state['count'] = 0
+
+    # (0, 'global'), (1, 'add-cmake-lib'), (2, 'add-cmake-lib'), ...
+    return (state['count'], state['cmd'])
+
+
+# todo: add --parallel argument for parallel build
+def main():
     global \
         SOURCES_ROOT, \
         INSTALL_ROOT, \
@@ -523,29 +673,161 @@ def main():
         CMAKE, \
         CMAKE_GLOBAL_ARGS
 
-    SOURCES_ROOT = args.sources_dir
-    INSTALL_ROOT = args.install_dir
-    CACHE_ROOT = args.cache_dir
+    main_parser = create_main_parser()
+    main_namespace = argparse.Namespace()
+    libraries: list[InstallingLibrary] = []
 
-    HEADER_SUBDIR = args.header_subdir
+    COMMANDS = register_commands()
+    COMMAND_NAMES = [ command.GetName() for command in COMMANDS ]
+    COMMAND_MAP = { command.GetName(): command for command in COMMANDS }
 
-    CMAKE = args.cmake
-    CMAKE_GLOBAL_ARGS = shlex.split(args.cmake_args)
+    # Group commands
+    command_groups = [ (key, list(args)) 
+                       for key, args in itertools.groupby(sys.argv[1:], lambda arg: groupargs(arg, known_commands=COMMAND_NAMES)) ]
 
-    cmake_libraries: list[CMakeLibrary] = parse_cmake_libs(args.cmake_lib or [])
-    install_libraries(cmake_libraries)
+    # Acquire global args
+    global_group_args = []
+    if command_groups and command_groups[0][0][1] == 'global':
+        _, args_list = command_groups.pop(0)
+        global_group_args = args_list
 
-    header_libraries: list[HeaderLibrary] = parse_header_libs(args.header_lib or [])
-    install_libraries(header_libraries)
+    # Global variables initialization
+    main_parser.parse_args(global_group_args or [], namespace=main_namespace)
 
-    manual_install_libraries: list[ManualLibrary] = parse_manual_install_libs(args.manual_lib or [])
-    install_libraries(manual_install_libraries)
+    SOURCES_ROOT = main_namespace.sources_dir
+    INSTALL_ROOT = main_namespace.install_dir
+    CACHE_ROOT = Path(main_namespace.cache_dir)
+    HEADER_SUBDIR = main_namespace.header_subdir
+    CMAKE = main_namespace.cmake
 
-    if not(cmake_libraries) and not(header_libraries) and not(manual_install_libraries):
+    try:
+        CMAKE_GLOBAL_ARGS = shlex.split(main_namespace.cmake_args)
+    except ValueError as e:
+        log(f"Failed to parse global --cmake-args: {e}", LogType.Error)
+        sys.exit(1)
+
+    for key, cmdline in command_groups:
+        cmd_name = key[1]
+
+        command_type : type[LibraryCommand] | None = COMMAND_MAP.get(cmd_name)
+        if command_type is None:
+            log(f"Skipping unknown command {cmd_name}", LogType.Warning)
+            continue
+
+        if not cmdline:
+            log(f"No arguments passed to {cmd_name}", LogType.Warning)
+            continue
+
+        try:
+            command_handler = command_type()
+        except Exception as e:
+            log(f"Failed to instantiate command class {command_type!r}: {e}", LogType.Error)
+            sys.exit(1)
+
+        try:
+            command_args = cmdline[1:]
+            lib = command_handler.CreateLibrary(command_args)
+            libraries.append(lib)
+        except Exception as e:
+            log(f"Failed to process command: {' '.join(cmdline)}. Error: {e}", LogType.Error)
+            sys.exit(1)
+
+    run_tests(main_namespace, libraries)
+
+    #install_libraries(libraries)
+
+    if not(libraries):
         log("Nothing to do.")
     else:
         log("All libraries installed successfully", LogType.Success)
 
 
+def run_tests(main_ns: argparse.Namespace, libraries: list):
+    log("--- Running Parser Tests ---", LogType.Info)
+
+    had_error = False
+
+    try:
+        assert main_ns.cache_dir == "caches"
+        assert main_ns.sources_dir == Path("third_party/src")
+        assert main_ns.cmake_args == '-G "Ninja Multi-Config" -DCMAKE_POLICY_DEFAULT_CMP0091=NEW'
+        log("--- Global args test passed --", LogType.Success)
+
+        assert libraries[0].source_dir_base == Path("tinyobjloader")
+        assert libraries[0].install_dir_base == Path("header-only")
+        assert libraries[0].rules == [('tiny_obj_loader.h', '.')]
+        log("--- tol test passed ---", LogType.Success)
+
+        assert libraries[1].source_dir_base == Path("SDL")
+        assert libraries[1].install_dir_base == Path("SDL3")
+        assert libraries[1].build_dir == Path("build_cmake")
+        assert libraries[1].extra_args == ['-DSDL_TEST_LIBRARY=OFF']
+        log("--- sdl test passed ---", LogType.Success)
+
+        assert libraries[2].source_dir_base == Path("SDL_image")
+        assert libraries[2].install_dir_base == Path("SDL3_image")
+        assert libraries[2].build_dir == Path("build")
+        assert libraries[2].extra_args == ['-DSDLIMAGE_AVIF=OFF', '-DSDLIMAGE_WEBP=OFF']
+        log("--- sdl image test passed ---", LogType.Success)
+
+        assert libraries[3].source_dir_base == Path("simple_term_colors")
+        assert libraries[3].install_dir_base == Path("header-only")
+        assert libraries[3].rules == [('include/stc.hpp', '.')]
+        log("--- stc test passed ---", LogType.Success)
+
+        expected_pairs = [
+            ('redistributable_bin/**/*.dll', 'bin'),
+            ('public/steam/*.h', 'include/steam'),
+            ('public/steam/lib/**/*.dll', 'bin')
+        ]
+        assert libraries[4].source_dir_base == Path("SteamworksSDK")
+        assert libraries[4].install_dir_base == Path("SteamworksSDK")
+        assert libraries[4].rules == expected_pairs
+        log("--- steamsdk test passed ---", LogType.Success)
+    except AssertionError as e:
+        log("--- TEST FAILED ---", LogType.Error)
+        print(f"Assertion Error: {e}")
+        had_error = True
+
+    if had_error:
+        log("One or more test failed.", LogType.Error)
+        sys.exit(1)
+    else:
+        log("--- All Parser Tests Passed ---", LogType.Success)
+
 if __name__ == "__main__":
+    sys.argv = [
+        'deps.py',
+        '--cache-dir=caches',
+        '--sources-dir=third_party/src',
+        '--install-dir=third_party/bin',
+        '--cmake-args=-G "Ninja Multi-Config" -DCMAKE_POLICY_DEFAULT_CMP0091=NEW',
+
+        'add-header-lib',
+            '--src=tinyobjloader',
+            '--glob=tiny_obj_loader.h',
+
+        'add-cmake-lib',
+            '--src=SDL',
+            '--install=SDL3',
+            '--build-dir=build_cmake',
+            '--args=-DSDL_TEST_LIBRARY=OFF',
+
+        'add-cmake-lib',
+            '--src=SDL_image',
+            '--install=SDL3_image',
+            '--args=-DSDLIMAGE_AVIF=OFF -DSDLIMAGE_WEBP=OFF',
+
+        'add-header-lib',
+            '--src=simple_term_colors',
+            '--glob=include/stc.hpp',
+
+        'add-manual-lib',
+            '--src=SteamworksSDK',
+            '--install=SteamworksSDK',
+            'rule', '--src=redistributable_bin/**/*.dll', '--dst', 'bin',
+            'rule', '--src=public/steam/*.h', '--dst', 'include/steam', '--ex', 'public/steam/isteam*.h',
+            'rule', '--src=public/steam/lib/**/*.dll', '--dst', 'bin'
+    ]
+
     main()
