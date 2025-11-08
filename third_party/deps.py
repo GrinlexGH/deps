@@ -684,7 +684,7 @@ def main():
     COMMAND_MAP = { command.GetName(): command for command in COMMANDS }
 
     # Group commands
-    command_groups = [ (key, list(args)) 
+    command_groups = [ (key, list(args))
                        for key, args in itertools.groupby(sys.argv[1:], lambda arg: groupargs(arg, known_commands=COMMAND_NAMES)) ]
 
     # Acquire global args
