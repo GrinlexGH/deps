@@ -1,3 +1,5 @@
 .vscode
 third_party/bin/*
 third_party/src/*
+build
+CMakeLists.txt

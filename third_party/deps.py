@@ -26,7 +26,7 @@
 #     --install=SteamworksSDK \
 #       rule --src='redistributable_bin/**/*.dll'    --dst=bin \
 #       rule --src='public/steam/lib/**/*.dll'       --dst=bin \
-#       rule --src='public/steam/*.h'                --dst=include/steam \
+#       rule --src='public/steam/*.h'                --dst=include/steam --ex='*.h' \
 #       rule --src='redistributable_bin/**/*.lib'    --dst=lib \
 #       rule --src='redistributable_bin/**/*.so'     --dst=lib \
 #       rule --src='redistributable_bin/**/*.dylib'  --dst=lib \
@@ -352,11 +352,10 @@ class ManualLibrary(InstallingLibrary):
 
             exclude_matches = set()
             if exclude_pattern:
-                ex_fixed, ex_sub = ManualLibrary._SplitPattern(exclude_pattern)
-                ex_root = self.source_dir / ex_fixed
+                ex_root = self.source_dir / fixed_prefix / exclude_pattern
 
                 if ex_root.exists():
-                    exclude_matches = set(Path(p) for p in glob(str(ex_root / ex_sub), recursive=True))
+                    exclude_matches = set(Path(p) for p in glob(str(ex_root), recursive=True))
 
             to_copy = matches - exclude_matches
 
@@ -569,7 +568,7 @@ class ManualCommand(LibraryCommand[ManualLibrary]):
         )
         parser.add_argument(
             '--ex', type=str, default=None,
-            help="Glob pattern for files/dirs to exclude from this rule."
+            help="Glob pattern for files/dirs to exclude from this rule (relative to --src constant prefix)."
         )
         return parser
 
