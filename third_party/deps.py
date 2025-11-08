@@ -651,6 +651,8 @@ def create_main_parser():
 # this is other group) and 'cmd' changes. itertools.groupby() will then group
 # arguments until the key changes, effectively collecting each command with its
 # parameters into a separate list.
+#
+# inspired by https://stackoverflow.com/a/10449310/16793487
 def groupargs(arg, state={'cmd': None, 'count': 0}, known_commands: list[str] | None = None):
     if arg in known_commands:
         state['cmd'] = arg
@@ -713,12 +715,7 @@ def main():
             log(f"No arguments passed to {cmd_name}", LogType.Warning)
             continue
 
-        command_type : type[LibraryCommand] = COMMAND_MAP[cmd_name]
-        try:
-            command_handler = command_type()
-        except Exception as e:
-            log(f"Failed to instantiate command class {command_type!r}: {e}", LogType.Error)
-            sys.exit(1)
+        command_handler = COMMAND_MAP[cmd_name]()
 
         try:
             command_args = cmdline[1:]
