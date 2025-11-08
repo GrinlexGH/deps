@@ -709,15 +709,11 @@ def main():
     for key, cmdline in command_groups:
         cmd_name = key[1]
 
-        command_type : type[LibraryCommand] | None = COMMAND_MAP.get(cmd_name)
-        if command_type is None:
-            log(f"Skipping unknown command {cmd_name}", LogType.Warning)
-            continue
-
         if not cmdline:
             log(f"No arguments passed to {cmd_name}", LogType.Warning)
             continue
 
+        command_type : type[LibraryCommand] = COMMAND_MAP[cmd_name]
         try:
             command_handler = command_type()
         except Exception as e:
