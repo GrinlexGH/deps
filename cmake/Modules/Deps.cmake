@@ -34,17 +34,16 @@
 #   list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/Modules")
 #   include(Deps)
 #
-#   deps_append_cmake_define(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreaded)
 #   if(ANDROID)
 #       deps_append_cmake_define(ANDROID_ABI)
 #       deps_append_cmake_define(CMAKE_ANDROID_ARCH_ABI)
 #   endif()
 #
 #   deps_add_cmake_project("SDL" INSTALL_SUBDIR "SDL3" CMAKE_ARGS -DSDL_TEST_LIBRARY=OFF)
+#   deps_add_cmake_project("glm" BUILD_DEBUG)
 #   deps_add_header_only("tinyobjloader" HEADERS "tiny_obj_loader.h")
 #   deps_add_manual_install(
 #       "SteamworksSDK"
-#       INSTALL_SUBDIR "SteamworksSDK"
 #       RULES
 #         "redistributable_bin/**/*.dll"      "bin"
 #         "public/steam/lib/**/*.dll"         "bin"
@@ -62,11 +61,10 @@
 #   include_directories(SYSTEM "${DEPS_HEADER_ONLY_INCLUDE_DIR}")
 #   find_package(SDL3 REQUIRED)
 #   find_package(SteamworksSDK REQUIRED)
-#
-#   add_subdirectory(libs/src/glm EXCLUDE_FROM_ALL SYSTEM)
+#   find_package(glm REQUIRED)
 #
 #   add_executable(skylabs src/main.cpp)
-#   deps_target_link_and_copy_runtime(skylabs PRIVATE
+#   deps_target_link_libraries(skylabs PRIVATE
 #       SDL3::SDL3
 #       SteamworksSDK::SteamAPI
 #       glm::glm

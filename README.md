@@ -95,8 +95,8 @@ Set `DEPS_OUT_SUBDIR` to keep builds for different compiler/runtime combinations
 # Copies runtime binaries of TARGETS next to the TARGET after build
   deps_copy_runtime_binaries(<TARGET> [TARGETS <lib>...])
 
-# Same as `target_link_libraries`, but also calls `deps_copy_runtime_binaries` for all linked libraries
-  deps_target_link_and_copy_runtime(...)
+# Same as `target_link_libraries`, but also calls `deps_copy_runtime_binaries` for all linked libraries and fixes static libraries
+  deps_target_link_libraries(...)
 ```
 
 For more info see documentation in [Deps.cmake](../cmake/Modules/Deps.cmake).
@@ -172,37 +172,37 @@ project("Skylabs" LANGUAGES CXX C)
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/Modules")
 include(Deps)
 
-deps_append_cmake_define(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreaded)
 if(ANDROID)
     deps_append_cmake_define(ANDROID_ABI)
     deps_append_cmake_define(CMAKE_ANDROID_ARCH_ABI)
 endif()
 
 deps_add_cmake_project("SDL" INSTALL_SUBDIR "SDL3" CMAKE_ARGS -DSDL_TEST_LIBRARY=OFF)
+deps_add_cmake_project("glm" BUILD_DEBUG)
 deps_add_header_only("tinyobjloader" HEADERS "tiny_obj_loader.h")
 deps_add_manual_install(
-  "SteamworksSDK"
-  RULES
-    "redistributable_bin/**/*.dll"      "bin"
-    "public/steam/lib/**/*.dll"         "bin"
-    "public/steam/*.h"                  "include/steam" EXCLUDE "*.json"
-    "redistributable_bin/**/*.lib"      "lib"
-    "redistributable_bin/**/*.so"       "lib"
-    "redistributable_bin/**/*.dylib"    "lib"
-    "public/steam/lib/**/*.lib"         "lib"
-    "public/steam/lib/**/*.so"          "lib"
-    "public/steam/lib/**/*.dylib"       "lib"
+    "SteamworksSDK"
+    RULES
+      "redistributable_bin/**/*.dll"      "bin"
+      "public/steam/lib/**/*.dll"         "bin"
+      "public/steam/*.h"                  "include/steam"
+      "redistributable_bin/**/*.lib"      "lib"
+        EXCLUDE "redistributable_bin/**/{libsteam_api.so,libtier0_s.a}"
+      "redistributable_bin/**/*.so"       "lib"
+      "redistributable_bin/**/*.dylib"    "lib"
+      "public/steam/lib/**/*.lib"         "lib"
+      "public/steam/lib/**/*.so"          "lib"
+      "public/steam/lib/**/*.dylib"       "lib"
 )
 deps_build_all()
 
 include_directories(SYSTEM "${DEPS_HEADER_ONLY_INCLUDE_DIR}")
 find_package(SDL3 REQUIRED)
 find_package(SteamworksSDK REQUIRED)
-
-add_subdirectory(third_party/src/glm EXCLUDE_FROM_ALL SYSTEM)
+find_package(glm REQUIRED)
 
 add_executable(skylabs src/main.cpp)
-deps_target_link_and_copy_runtime(skylabs PRIVATE
+deps_target_link_libraries(skylabs PRIVATE
     SDL3::SDL3
     SteamworksSDK::SteamAPI
     glm::glm
