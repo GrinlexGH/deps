@@ -247,7 +247,7 @@ function(deps_add_header_only SOURCE_SUBDIR)
     set(_deps_internal_cmd_args "${_deps_cmd_args}" PARENT_SCOPE)
 endfunction()
 
-# deps_add_manual_install(<SOURCE_SUBDIR> [INSTALL_SUBDIR <dir>] [RULES <pattern> <dst>...])
+# deps_add_manual_install(<SOURCE_SUBDIR> [INSTALL_SUBDIR <dir>] [RULES <pattern> <dst> [EXCLUDE <ex>]...])
 #
 # Define manual copy/install rules. This option may be repeated.
 #
@@ -255,7 +255,9 @@ endfunction()
 #   SOURCE_SUBDIR  - Source directory containing files to copy
 #   INSTALL_SUBDIR - Target subdirectory under the install root (defaults to SOURCE_SUBDIR directory name)
 #                    (python will copy all files to the DEPS_INSTALL_DIR/INSTALL_SUBDIR)
-#   RULES          - pairs of: file glob pattern and destination subfolder
+#   RULES          - pairs of: file glob pattern and destination subfolder.
+#                    You can add EXCLUDE glob right after the rule (exclude glob is
+#                    relative to the rule constant prefix before any glob char)
 #                    (python will find these files in DEPS_SOURCES_DIR/SOURCE_SUBDIR)
 #
 # Glob is supported. When copying directories that include wildcards, a constant
@@ -266,12 +268,14 @@ endfunction()
 #     "SteamworksSDK"
 #     INSTALL_SUBDIR "SteamSDK"
 #     RULES
-#     "redistributable_bin/**/*.dll"      "bin"
+#       "redistributable_bin/**/*.lib" "lib"
+#         EXCLUDE "**/{libsteam_api.so,libtier0_s.a}"
 # )
 #
-# `"redistributable_bin/**/*.dll" "bin"`
+# `"redistributable_bin/**/*.lib" "bin"`
 # copies `DEPS_SOURCES_DIR/SteamworksSDK/redistributable_bin/linux64/libsteam_api.so` into
-# `DEPS_INSTALL_DIR/SteamSDK/linux64/bin`.
+# `DEPS_INSTALL_DIR/SteamSDK/linux64/bin`, but ignores any `redistributable_bin/**/{libsteam_api.so,libtier0_s.a}`
+# files.
 function(deps_add_manual_install SOURCE_SUBDIR)
     set(oneValueArgs INSTALL_SUBDIR)
     set(multiValueArgs RULES)

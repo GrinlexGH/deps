@@ -1,10 +1,31 @@
-# Dependency Installer for CMake Projects
+
+<p align="center">
+<img  width="400" height="167" alt="deps-logo" src="https://github.com/user-attachments/assets/cf491bd1-caae-49f9-b869-e4d9a420a461" />
+</p>
+
+<p align="center">
+<a href="https://search.maven.org/artifact/com.webencyclop.core/mftool-java"> <img src="https://img.shields.io/badge/CMake-%23008FBA.svg?style=for-the-badge&logo=cmake&logoColor=white"/> </a> <a href="https://www.codacy.com/gh/ankitwasankar/mftool-java/dashboard?utm_source=github.com&utm_medium=referral&utm_content=ankitwasankar/mftool-java&utm_campaign=Badge_Coverage"> <img src="https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54"/> </a>
+</p>
+
+---
 
 This module automatically builds and installs external dependencies during CMake configuration, keeping the project self-contained without requiring preinstalled SDKs or repeated source rebuilds.
 
 ###### Also provides some `FindXXX.cmake` modules.
 
-## Why this exists
+---
+
+## Table of Contents
+- [Why](#why)
+  - [Problems](#problems)
+  - [How this module helps](#how-this-module-helps)
+  - [Result](#result)
+- [How it works](#how-it-works)
+  - [Quick overview](#quick-overview)
+  - [Provided CMake functions](#provided-cmake-functions)
+  - [Directory layout](#directory-layout)
+
+## Why
 
 Many CMake projects struggle with brittle, slow, or platform-dependent dependency handling. This module fixes that by building and installing external libraries automatically during configuration so your repository stays self-contained and reproducible.
 
@@ -18,9 +39,9 @@ Many CMake projects struggle with brittle, slow, or platform-dependent dependenc
 
 ### How this module helps
 
-* Builds CMake-based dependencies once in **Release** mode to avoid duplicate configuration/build cycles.
+* Builds CMake-based dependencies once to avoid duplicate configuration-build cycles.
 
-* **Caches** builds using Git commit hashes so libraries are rebuilt only when their sources change.
+* **Caches** builds using Git commit and cmake arguments hashes so libraries are rebuilt only when their sources or arguments change.
 
 * Installs artifacts into a **reproducible layout** that supports multiple ABI/runtime variants side-by-side (e.g., vcruntime or libc++).
 
@@ -36,18 +57,22 @@ Faster, more reliable builds, fewer environment assumptions, and a self-containe
 
 1. Clone the required git repositories into `third_party/src`.
 
-2. Register each dependency during CMake configuration using these functions:
-* `deps_add_cmake_project(...)`
-* `deps_add_header_only(...)`
-* `deps_add_manual_install(...)`  
+2. Include this module using `list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")` and `include(Deps)`
+
+3. Register each dependency during CMake configuration using these functions:  
+```cmake
+deps_add_cmake_project(...)
+deps_add_header_only(...)
+deps_add_manual_install(...)
+```  
 Use `DEPS_CMAKE_GLOBAL_ARGS` to pass common CMake arguments to all CMake-based deps.  
-Optionally set `DEPS_OUT_SUBDIR` to keep builds for different compiler/runtime combinations in separate output folders.
+Set `DEPS_OUT_SUBDIR` to keep builds for different compiler/runtime combinations in separate output folders.
 
-3. Call `deps_build_all()` once. That runs the external Python script, which configures, builds and installs each dependency into `third_party/bin/DEPS_OUT_SUBDIR`.
+4. Call `deps_build_all()` once. That runs the external Python script, which configures, builds and installs each dependency into `third_party/bin/DEPS_OUT_SUBDIR`.
 
-4. After install:
-* The module updates `CMAKE_PREFIX_PATH` so `find_package()` finds installed packages (CMake-based deps are installed in CONFIG mode).
-* Header-only libraries are exposed via `DEPS_HEADER_ONLY_INCLUDE_DIR` — add it with `include_directories()` or `target_include_directories()`.
+5. After install:
+* Just use `find_package()` to find libraries.
+* Header-only libraries are exposed via `DEPS_HEADER_ONLY_INCLUDE_DIR` - add it with `include_directories()` or `target_include_directories()`.
 * For manually installed or non-CMake libs you may need a `Find<Package>.cmake` to create imported targets and set include/link settings.
 
 ## Provided CMake functions
@@ -63,7 +88,7 @@ Optionally set `DEPS_OUT_SUBDIR` to keep builds for different compiler/runtime c
   deps_add_header_only(<SOURCE_SUBDIR> [INSTALL_SUBDIR <dir>] [HEADERS <patterns>...])
 
 # Registers copy rules for non-CMake dependencies
-  deps_add_manual_install(<SOURCE_SUBDIR> [INSTALL_SUBDIR <dir>] [RULES <pattern> <dst>...])
+  deps_add_manual_install(<SOURCE_SUBDIR> [INSTALL_SUBDIR <dir>] [RULES <pattern> <dst> [EXCLUDE <ex>]...])
 
 # Triggers the installation process for all previously registered dependencies
   deps_build_all([VERBOSE])
@@ -75,25 +100,25 @@ Optionally set `DEPS_OUT_SUBDIR` to keep builds for different compiler/runtime c
   deps_target_link_and_copy_runtime(...)
 ```
 
-For more info see comments in [Deps.cmake](../cmake/Modules/Deps.cmake).
+For more info see documentation in [Deps.cmake](../cmake/Modules/Deps.cmake).
 
 ## CMake & environment variables
 
 | Variable                          | Description |
 |-----------------------------------|---------------------------------------------------------------------|
-| DEPS_THIRD_PARTY_SUBDIR* (Env)    | Name of the directory with Python script and all third-party library files (default: `third_party`) |
-| DEPS_SOURCES_DIR (Env)            | Path containing sources as git repositories (default: `${PROJECT_SOURCE_DIR}/${DEPS_THIRD_PARTY_SUBDIR}/src`) |
-| DEPS_OUT_SUBDIR* (Env)            | Subdirectory in `DEPS_INSTALL_DIR` |
-| DEPS_INSTALL_DIR (Env)            | Installation directory (default: `${PROJECT_SOURCE_DIR}/${DEPS_THIRD_PARTY_SUBDIR}/bin/${DEPS_OUT_SUBDIR}`) |
-| DEPS_CACHE_DIR (Env)              | Path to git-hash build cache (default: `${DEPS_INSTALL_DIR}/cache`) |
-| DEPS_PYTHON (Env)                 | Path to Python interpreter (optional override) |
-| DEPS_PYTHON (Env)                 | Path to the Python script (default: `${PROJECT_SOURCE_DIR}/${DEPS_THIRD_PARTY_SUBDIR}/deps.py`) |
-| DEPS_CMAKE_GLOBAL_ARGS (Env)      | Additional global arguments passed to dependency CMake builds |
-| DEPS_HEADER_SUBDIR (Env)          | Subdirectory name for header-only libraries (default: `header-only`) |
+| DEPS_THIRD_PARTY_SUBDIR*          | Name of the directory with Python script and all third-party library files (default: `third_party`) |
+| DEPS_SOURCES_DIR                  | Path containing sources as git repositories (default: `${PROJECT_SOURCE_DIR}/${DEPS_THIRD_PARTY_SUBDIR}/src`) |
+| DEPS_OUT_SUBDIR*                  | Subdirectory in `DEPS_INSTALL_DIR` |
+| DEPS_INSTALL_DIR                  | Installation directory (default: `${PROJECT_SOURCE_DIR}/${DEPS_THIRD_PARTY_SUBDIR}/bin/${DEPS_OUT_SUBDIR}`) |
+| DEPS_CACHE_DIR                    | Path to directory with hash files (default: is empty, which means that each hash file will be placed to the library install folder) |
+| DEPS_PYTHON                       | Path to Python interpreter (optional override) |
+| DEPS_PYTHON                       | Path to the Python script (default: `${PROJECT_SOURCE_DIR}/${DEPS_THIRD_PARTY_SUBDIR}/deps.py`) |
+| DEPS_CMAKE_GLOBAL_ARGS            | Additional global arguments passed to dependency CMake builds |
+| DEPS_HEADER_SUBDIR                | Subdirectory name for header-only libraries (default: `header-only`) |
 | DEPS_HEADER_ONLY_INCLUDE_DIR      | Read-only variable. Directory with headers of header-only libraries |
 
 \* must be set before include of this module  
-(Env) means that this variable **can** be override with the value of an environment variable with the same name.
+All variables will be replaced with the value of an environment variable with the same name, if cmake variable is not defined.
 
 ## Directory layout
 
@@ -106,10 +131,9 @@ repo/
           ├─ bin/                     # Installation output root
           │   ├─ Windows-x64/msvcrt/  # <- DEPS_OUT_SUBDIR (build/runtime variant)
           │   │      ├─ cache/        # Git-hash build cache (reused across builds)
-          │   │      └─ SDL3/         # SDL CONFIG install folder
-          │   │─ Linux-x64/
-          │   │      └─ cache/
-          │   └─ SDL3/                # SDL CONFIG install folder
+          │   │      └─ SDL3/         # SDL install folder
+          │   └─ Linux-x64/
+          │          └─ SDL3/         # SDL install folder
           └─ header-only/             # <- DEPS_HEADER_SUBDIR, collected headers
 ```
 
