@@ -490,17 +490,23 @@ function(deps_copy_runtime_binaries TARGET)
     endforeach()
 endfunction()
 
-# deps_target_link_and_copy_runtime(<target> ... <item>... ...)
-# deps_target_link_and_copy_runtime(<target> <PRIVATE|PUBLIC|INTERFACE> <item>... [<PRIVATE|PUBLIC|INTERFACE> <item>...]...)
-# deps_target_link_and_copy_runtime(<target> <item>...)
-# deps_target_link_and_copy_runtime(<target> <LINK_PRIVATE|LINK_PUBLIC> <lib>... [<LINK_PRIVATE|LINK_PUBLIC> <lib>...]...)
-# deps_target_link_and_copy_runtime(<target> LINK_INTERFACE_LIBRARIES <item>...)
+# deps_target_link_libraries(<target> [<visibility>] <item>... [<visibility> <item>...]...)
 #
-# Exactly the same as target_link_libraries, but it also calls deps_copy_runtime_binaries
-# for all linked libraries.
-function(deps_target_link_and_copy_runtime TARGET)
-    target_link_libraries(${TARGET} ${ARGN})
-
+# Wrapper for `target_link_libraries` that also copies runtime binaries
+# (DLLs / shared libraries) of all linked targets.
+#
+# This behaves the same as `target_link_libraries`, but after linking,
+# it calls `deps_copy_runtime_binaries()` to ensure dependent shared libraries
+# are copied next to the target.
+#
+# Additionally, STATIC and OBJECT library targets are patched with
+# MAP_IMPORTED_CONFIG_RELWITHDEBINFO=Release to fix configuration mismatches
+# with MSVC.
+#
+# Usage:
+#   deps_target_link_libraries(MyApp PRIVATE FooLib BarLib)
+#   deps_target_link_libraries(MyApp PUBLIC SDL2::SDL2)
+function(deps_target_link_libraries TARGET)
     set(linked_libs "")
 
     foreach(arg IN LISTS ARGN)
@@ -516,7 +522,27 @@ function(deps_target_link_and_copy_runtime TARGET)
         endif()
     endforeach()
 
-    if(linked_libs)
-        deps_copy_runtime_binaries(${TARGET} TARGETS ${linked_libs})
+    # Hack for static libraries for msvc
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+        foreach(target IN LISTS linked_libs)
+            if(TARGET ${target})
+                # Resolve alias
+                get_target_property(real ${target} ALIASED_TARGET)
+                if(real)
+                    set(target ${real})
+                endif()
+
+                # Fix static libraries
+                get_target_property(target_type ${target} TYPE)
+                if("${target_type}" MATCHES "STATIC_LIBRARY|OBJECT_LIBRARY")
+                    set_target_properties(${target} PROPERTIES MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release)
+                    target_link_options(${target} INTERFACE "/ignore:4099") # Ignore missing pdb
+                endif()
+            endif()
+        endforeach()
     endif()
+
+    target_link_libraries(${TARGET} ${ARGN})
+
+    deps_copy_runtime_binaries(${TARGET} TARGETS ${linked_libs})
 endfunction()
