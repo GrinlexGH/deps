@@ -510,7 +510,7 @@ class CMakeCommand(LibraryCommand[CMakeLibrary]):
         )
         parser.add_argument(
             '--build-debug', action="store_true",
-            help="Also build Debug configuration after building Release."
+            help="Also build Debug configuration after building Release. Useful for installing static libraries."
         )
         return parser
 

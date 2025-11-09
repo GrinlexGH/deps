@@ -155,7 +155,8 @@ endmacro()
 #                     (relative to DEPS_INSTALL_DIR)
 #   BUILD_FOLDER    - path to the cmake configure directory (defaults to "build")
 #                     (relative to DEPS_SOURCES_DIR/SOURCE_SUBDIR)
-#   BUILD_DEBUG     - option whether to also build Debug configuration after Release
+#   BUILD_DEBUG     - option whether to also build Debug configuration after Release. Useful for
+#                     installing static libraries
 function(deps_add_cmake_project SOURCE_SUBDIR)
     set(options BUILD_DEBUG)
     set(oneValueArgs INSTALL_SUBDIR BUILD_FOLDER)
