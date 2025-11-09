@@ -13,8 +13,6 @@ This module automatically builds and installs external dependencies during CMake
 
 ###### Also provides some `FindXXX.cmake` modules.
 
----
-
 ## Table of Contents
 - [Why](#why)
   - [Problems](#problems)
