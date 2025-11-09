@@ -24,6 +24,7 @@ This module automatically builds and installs external dependencies during CMake
   - [Quick overview](#quick-overview)
   - [Provided CMake functions](#provided-cmake-functions)
   - [Directory layout](#directory-layout)
+- [Usage example](#usage-example)
 
 ## Why
 
@@ -139,12 +140,9 @@ repo/
 
 This is particularly useful when switching between **CMake toolchains** or [**VS Code kits**](https://gist.github.com/GrinlexGH/cffbe9727b7183d7044e2c4af378ffd2).
 
-## When to use add_subdirectory() or system wide packages instead
+## When to use system wide packages instead
 
-Use `add_subdirectory()` for static libraries that must match your project's compiler flags and runtime options or if you need to use Link Time Optimization.
-
-For all other external dependencies, prefer this system to reduce build complexity.  
-Of course large libraries like Qt, that you will never want to build from source, are better handled via system packages and `find_package(EXACT)`.
+Of course large libraries like Qt, that you will never want to build from source, are better handled via system packages.
 
 ## Usage example
 
