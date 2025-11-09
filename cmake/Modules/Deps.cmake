@@ -144,7 +144,7 @@ macro(deps_append_cmake_define VAR)
     endif()
 endmacro()
 
-# deps_add_cmake_project(<SOURCE_SUBDIR> [CMAKE_ARGS <args>...] [INSTALL_SUBDIR <dir>] [BUILD_FOLDER <dir>])
+# deps_add_cmake_project(<SOURCE_SUBDIR> [CMAKE_ARGS <args>...] [INSTALL_SUBDIR <dir>] [BUILD_FOLDER <dir>] [BUILD_DEBUG])
 #
 # Adds a library that is built as a separate CMake project.
 #
@@ -152,13 +152,15 @@ endmacro()
 #   SOURCE_SUBDIR   - path to the library source directory
 #   CMAKE_ARGS      - additional arguments passed to CMake when building the library
 #   INSTALL_SUBDIR  - subdirectory for installation (defaults to the name of SOURCE_SUBDIR directory)
-#                     (cmake will use: DEPS_INSTALL_DIR/INSTALL_SUBDIR)
+#                     (relative to DEPS_INSTALL_DIR)
 #   BUILD_FOLDER    - path to the cmake configure directory (defaults to "build")
-#                     (cmake will use: DEPS_SOURCES_DIR/SOURCE_SUBDIR/BUILD_FOLDER)
+#                     (relative to DEPS_SOURCES_DIR/SOURCE_SUBDIR)
+#   BUILD_DEBUG     - option whether to also build Debug configuration after Release
 function(deps_add_cmake_project SOURCE_SUBDIR)
+    set(options BUILD_DEBUG)
     set(oneValueArgs INSTALL_SUBDIR BUILD_FOLDER)
     set(multiValueArgs CMAKE_ARGS)
-    cmake_parse_arguments(ARG "" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+    cmake_parse_arguments(ARG "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     list(JOIN SOURCE_SUBDIR "/" _source_subdir)
 
@@ -181,13 +183,18 @@ function(deps_add_cmake_project SOURCE_SUBDIR)
     endif()
 
     set(_deps_cmd_args "${_deps_internal_cmd_args}")
-    list(APPEND _deps_cmd_args 
+    list(APPEND _deps_cmd_args
         "add-cmake-lib"
         "--src=${_source_subdir}"
         "--install=${_install_subdir}"
         "--build-dir=${_build_folder}"
         "--args=${_cmake_args}"
     )
+
+    if(ARG_BUILD_DEBUG)
+        list(APPEND _deps_cmd_args "--build-debug")
+    endif()
+
     set(_deps_internal_cmd_args "${_deps_cmd_args}" PARENT_SCOPE)
 endfunction()
 

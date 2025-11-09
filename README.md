@@ -57,13 +57,13 @@ Optionally set `DEPS_OUT_SUBDIR` to keep builds for different compiler/runtime c
   deps_append_cmake_define(VAR_NAME [VALUE])
 
 # Registers a dependency that is built with CMake
-  deps_add_cmake_project(<source_subdir> [INSTALL_SUBDIR <name>] [CMAKE_ARGS ...])
+  deps_add_cmake_project(<SOURCE_SUBDIR> [CMAKE_ARGS <args>...] [INSTALL_SUBDIR <dir>] [BUILD_FOLDER <dir>] [BUILD_DEBUG])
 
 # Registers a header-only dependency
-  deps_add_header_only(<source_subdir> [INSTALL_SUBDIR <name>] [HEADERS ...])
+  deps_add_header_only(<SOURCE_SUBDIR> [INSTALL_SUBDIR <dir>] [HEADERS <patterns>...])
 
 # Registers copy rules for non-CMake dependencies
-  deps_add_manual_install(<source_subdir> [INSTALL_SUBDIR <name>] [RULES <pattern> <dst> ...])
+  deps_add_manual_install(<SOURCE_SUBDIR> [INSTALL_SUBDIR <dir>] [RULES <pattern> <dst>...])
 
 # Triggers the installation process for all previously registered dependencies
   deps_build_all([VERBOSE])
@@ -165,7 +165,7 @@ deps_add_manual_install(
   RULES
     "redistributable_bin/**/*.dll"      "bin"
     "public/steam/lib/**/*.dll"         "bin"
-    "public/steam/*.h"                  "include/steam"
+    "public/steam/*.h"                  "include/steam" EXCLUDE "*.json"
     "redistributable_bin/**/*.lib"      "lib"
     "redistributable_bin/**/*.so"       "lib"
     "redistributable_bin/**/*.dylib"    "lib"
