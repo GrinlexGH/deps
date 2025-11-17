@@ -154,7 +154,7 @@ endmacro()
 #   BUILD_FOLDER    - path to the cmake configure directory (defaults to "build")
 #                     (relative to DEPS_SOURCES_DIR/SOURCE_SUBDIR)
 #   BUILD_DEBUG     - option whether to also build Debug configuration after Release. Useful for
-#                     installing static libraries
+#                     installing static libraries (works only with msvc)
 function(deps_add_cmake_project SOURCE_SUBDIR)
     set(options BUILD_DEBUG)
     set(oneValueArgs INSTALL_SUBDIR BUILD_FOLDER)
@@ -190,7 +190,7 @@ function(deps_add_cmake_project SOURCE_SUBDIR)
         "--args=${_cmake_args}"
     )
 
-    if(ARG_BUILD_DEBUG)
+    if((CMAKE_CXX_COMPILER_ID STREQUAL "MSVC") AND ARG_BUILD_DEBUG)
         list(APPEND _deps_cmd_args "--build-debug")
     endif()
 
